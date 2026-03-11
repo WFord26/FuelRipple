@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+**/dist/
+**/build/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Docs
+docs/
+*.md
+!README.md
+
+# Test & Coverage
+coverage/
+**/*.test.ts
+**/*.spec.ts
+jest.config.*
+
+# Turborepo cache
+.turbo/
+
+# Docker
+docker-compose.yml
+**/Dockerfile
+
+# Infrastructure
+infra/
+.github/
+
+# Misc
+*.log
+npm-debug.log*

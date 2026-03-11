@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: fuelripple-db
+    environment:
+      POSTGRES_DB: gastracker
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    command: postgres -c shared_preload_libraries=timescaledb
+
+  redis:
+    image: redis:7-alpine
+    container_name: fuelripple-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+volumes:
+  postgres_data:
+  redis_data:

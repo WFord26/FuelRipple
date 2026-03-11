@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Favicon & manifest -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#3b82f6" />
+
+    <!-- Primary meta -->
+    <title>FuelRipple — US Gas Price Tracker &amp; Consumer Disruption Index</title>
+    <meta name="description" content="Track US gasoline prices across all PADD regions and 50 states. Includes a Consumer Disruption Index, refinery supply health monitor, crude oil lag analysis, and diesel freight-to-CPI pass-through model. Powered by EIA, FRED, and AAA data." />
+    <meta name="author" content="FuelRipple" />
+    <meta name="keywords" content="gas price tracker, PADD regions, consumer disruption index, refinery utilization, crude oil correlation, gasoline price forecast, fuel cost calculator, diesel price impact" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="FuelRipple" />
+    <meta property="og:title" content="FuelRipple — US Gas Price Tracker &amp; Consumer Disruption Index" />
+    <meta property="og:description" content="Track US gasoline prices across all PADD regions. Consumer Disruption Index, refinery supply health, crude oil lag analysis, and more." />
+    <meta property="og:image" content="/og-image.svg" />
+    <meta property="og:url" content="https://fuelripple.com" />
+
+    <!-- Twitter card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@FuelRipple" />
+    <meta name="twitter:title" content="FuelRipple — US Gas Price Tracker &amp; Consumer Disruption Index" />
+    <meta name="twitter:description" content="Track US gasoline prices across all PADD regions. Consumer Disruption Index, refinery supply health, crude oil lag analysis." />
+    <meta name="twitter:image" content="/og-image.svg" />
+
+    <!-- Canonical (overridden per-route by usePageSEO hook) -->
+    <link rel="canonical" href="https://fuelripple.com" />
+
+    <!-- Schema.org: Organization -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "FuelRipple",
+      "url": "https://fuelripple.com",
+      "description": "US gasoline price tracker and consumer disruption index. Powered by EIA and FRED data.",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://fuelripple.com/comparison?region={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

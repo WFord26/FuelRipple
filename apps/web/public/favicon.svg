@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="32" fill="#0f172a"/>
+  <!-- Gas pump body -->
+  <rect x="14" y="22" width="22" height="28" rx="3" fill="#3b82f6"/>
+  <!-- Pump screen/display -->
+  <rect x="18" y="26" width="14" height="8" rx="1.5" fill="#1e3a5f"/>
+  <!-- Price display -->
+  <text x="25" y="33" font-family="monospace" font-size="5" fill="#60a5fa" text-anchor="middle">$3.45</text>
+  <!-- Nozzle arm -->
+  <path d="M36 28 L44 28 L44 22" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <!-- Nozzle -->
+  <rect x="41" y="18" width="5" height="6" rx="1.5" fill="#94a3b8"/>
+  <!-- Fuel type badge -->
+  <rect x="18" y="38" width="14" height="8" rx="1.5" fill="#1d4ed8"/>
+  <text x="25" y="44" font-family="sans-serif" font-size="5" font-weight="bold" fill="white" text-anchor="middle">REG</text>
+  <!-- Base -->
+  <rect x="12" y="50" width="26" height="3" rx="1.5" fill="#1e293b"/>
+</svg>

@@ -288,14 +288,12 @@ jobs:
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_43645EA172E34549B2664D9DDDEFE163 }}
 
       # -----------------------------------------------------------------------
-      # 3. Ensure resource group exists
+      # 3. Verify resource group exists
       # -----------------------------------------------------------------------
-      - name: Ensure resource group exists
+      - name: Verify resource group exists
         run: |
-          az group create \
+          az group show \
             --name ${{ needs.setup.outputs.resource_group }} \
-            --location westus3 \
-            --tags project=fuelripple environment=${{ needs.setup.outputs.environment }} \
             --output none
 
       # -----------------------------------------------------------------------

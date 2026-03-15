@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.1-beta.2] - 2026-03-15
+## [1.0.1] - 2026-03-15
 ### Added
 - **VITE_API_URL Docker build argument** — `apps/web/Dockerfile` now accepts a
   `VITE_API_URL` build arg (default: `https://api.fuelripple.com/api/v1`), baking the

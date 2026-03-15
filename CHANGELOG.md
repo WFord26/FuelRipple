@@ -7,12 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+---
 
-### Changed
+## [1.0.1] - 2026-03-15
+### Added
+- **VITE_API_URL Docker build argument** — `apps/web/Dockerfile` now accepts a
+  `VITE_API_URL` build arg (default: `https://api.fuelripple.com/api/v1`), baking the
+  correct API base URL into the static bundle at image build time
+- **Preview flag for bump-version** (`scripts/bump-version.js`) — pass `--preview` (or
+  `-p`) to print the resulting version without writing or committing any files
+- **Release SOP** (`docs/RELEASE.md`) — standard operating procedure covering the full
+  lifecycle: changelog update → beta bump → beta deployment → PR → review → merge → prod
+- **Version bump script** (`scripts/bump-version.js`) — Node.js CLI for managing semver
+  across `apps/web`, `apps/api`, and the root `package.json`
+  - Bump types: `patch`, `minor`, `major`, `pre-patch`, `pre-minor`, `pre-major`, `release`
+  - Automatically stages changed files and commits after each bump
+  - Pre-release examples: `1.0.0 → 1.0.1-beta.0`; subsequent beta run → `1.0.1-beta.1`
+  - Release promotion: `1.0.1-beta.0 → 1.0.1`
+- **npm version scripts** in root `package.json`:
+  `version:beta:patch`, `version:beta:minor`, `version:beta:major`,
+  `version:release`, `version:release:api`, `version:release:web`
+- **Azure App Service CI/CD workflows** — GitHub Actions workflow configs for building
+  and deploying the API and web containers to Azure App Service (added 2026-03-14,
+  updated 2026-03-15)
+- **Energy price seeding & correlation** — initial implementation of EIA historical data
+  backfill (`apps/api/src/scripts/`) and correlation calculation helpers
+  (`packages/impact-engine/src/correlation.ts`)
+- **Copilot instructions** (`.github/copilot-instructions.md`) — project-level guidance
+  for GitHub Copilot covering monorepo structure, data flow, and critical patterns
 
 ### Fixed
-
+- Updated `README.md` to include the live site URL (https://www.fuelripple.com)
 ---
 
 ## [1.0.0] - 2026-03-11

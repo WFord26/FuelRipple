@@ -22,26 +22,34 @@ RUN npm ci
 COPY packages/shared/ packages/shared/
 COPY apps/web/ apps/web/
 
+# Accept VITE_API_URL at build time so Vite bakes it into the JS bundle
+ARG VITE_API_URL=https://api.fuelripple.com/api/v1
+ENV VITE_API_URL=${VITE_API_URL}
+
 # Build shared package + web app via Turborepo
 RUN npx turbo run build --filter=@fuelripple/web...
 
 # ---------- Stage 2: Serve with nginx ----------
 FROM nginx:1.25-alpine AS runner
 
-# Copy custom nginx config
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+# Copy nginx config as a template — the entrypoint's 20-envsubst-on-templates.sh
+# will substitute ${API_URL} at container start and write to /etc/nginx/conf.d/.
+# Only API_URL is substituted so nginx's own $host/$uri/$scheme vars are preserved.
+COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
+ENV NGINX_ENVSUBST_TEMPLATE_VARS=API_URL
 
 # Copy built SPA files
 COPY --from=builder /app/apps/web/dist/ /usr/share/nginx/html/
 
-# Add non-root user
+# Give the nginx user write access to runtime directories.
+# Note: USER nginx is intentionally omitted — the entrypoint runs as root to
+# perform envsubst and write to /etc/nginx/conf.d/; nginx workers then run
+# under the nginx user as specified by the main nginx.conf.
 RUN chown -R nginx:nginx /usr/share/nginx/html && \
     chown -R nginx:nginx /var/cache/nginx && \
     chown -R nginx:nginx /var/log/nginx && \
     touch /var/run/nginx.pid && \
     chown -R nginx:nginx /var/run/nginx.pid
-
-USER nginx
 
 EXPOSE 8080
 

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/ManagedSolution/GasTrack/tree/main/docs
+    about: Read the architecture, setup, and deployment docs before opening an issue.
+  - name: EIA Open Data
+    url: https://www.eia.gov/opendata/
+    about: Reference for EIA series IDs and data definitions.
+  - name: FRED API
+    url: https://fred.stlouisfed.org/docs/api/fred/
+    about: Reference for FRED economic series.

@@ -57,6 +57,7 @@
 
 ### 1.1 Create a Service Principal for GitHub Actions (OIDC)
 
+**Bash**
 ```bash
 # Set your subscription
 az account set --subscription "<YOUR_SUBSCRIPTION_ID>"
@@ -69,10 +70,24 @@ az ad sp create-for-rbac \
   --sdk-auth
 ```
 
+**PowerShell**
+```powershell
+# Set your subscription
+az account set --subscription "<YOUR_SUBSCRIPTION_ID>"
+
+# Create a service principal with Contributor role
+az ad sp create-for-rbac `
+  --name "sp-fuelripple-github" `
+  --role Contributor `
+  --scopes "/subscriptions/<YOUR_SUBSCRIPTION_ID>" `
+  --sdk-auth
+```
+
 ### 1.2 Configure OIDC Federated Credentials
 
 For passwordless GitHub Actions auth (recommended over secrets):
 
+**Bash**
 ```bash
 APP_ID=$(az ad sp list --display-name "sp-fuelripple-github" --query "[0].appId" -o tsv)
 
@@ -93,19 +108,47 @@ az ad app federated-credential create --id $APP_ID --parameters '{
 }'
 ```
 
+**PowerShell**
+```powershell
+$APP_ID = az ad sp list --display-name "sp-fuelripple-github" --query "[0].appId" -o tsv
+
+# For main branch (prod)
+$credMain = @{
+  name      = "github-main"
+  issuer    = "https://token.actions.githubusercontent.com"
+  subject   = "repo:<YOUR_GITHUB_ORG>/<YOUR_REPO>:ref:refs/heads/main"
+  audiences = @("api://AzureADTokenExchange")
+} | ConvertTo-Json -Compress
+az ad app federated-credential create --id $APP_ID --parameters $credMain
+
+# For develop branch (dev)
+$credDev = @{
+  name      = "github-develop"
+  issuer    = "https://token.actions.githubusercontent.com"
+  subject   = "repo:<YOUR_GITHUB_ORG>/<YOUR_REPO>:ref:refs/heads/develop"
+  audiences = @("api://AzureADTokenExchange")
+} | ConvertTo-Json -Compress
+az ad app federated-credential create --id $APP_ID --parameters $credDev
+```
+
 ### 1.3 Add GitHub Secrets
 
-In your repo → Settings → Secrets and variables → Actions, add:
+Secrets are scoped to **GitHub Environments** (`dev` and `prod`). In your repo → Settings → Environments, create both environments, then add the following secrets to each:
 
 | Secret | Value |
 |--------|-------|
-| `AZURE_CLIENT_ID` | Service principal App ID |
-| `AZURE_TENANT_ID` | Your Azure AD tenant ID |
-| `AZURE_SUBSCRIPTION_ID` | Your subscription ID |
+| `ACR_LOGIN_SERVER` | ACR login server, e.g. `acrfuelrippledev.azurecr.io` |
+| `ACR_USERNAME` | ACR admin username |
+| `ACR_PASSWORD` | ACR admin password |
+| `FUELRIPPLE_AZURE_CLIENT_ID` | Service principal App ID (OIDC) |
+| `FUELRIPPLE_AZURE_TENANT_ID` | Your Azure AD tenant ID |
+| `FUELRIPPLE_AZURE_SUBSCRIPTION_ID` | Your subscription ID |
 | `DB_PASSWORD` | Strong password for TimescaleDB |
 | `EIA_API_KEY` | Your EIA API key |
 | `FRED_API_KEY` | Your FRED API key |
-| `DATABASE_URL` | `postgresql://fuelripple:<DB_PASSWORD>@<DB_IP>:5432/gastracker` |
+| `DATABASE_URL` | `postgresql://fuelripple:<DB_PASSWORD>@<DB_IP>:5432/gastracker?sslmode=require` |
+
+> **ACR admin credentials**: Enable admin user on your ACR via `az acr update --name <ACR_NAME> --admin-enabled true`, then retrieve credentials with `az acr credential show --name <ACR_NAME>`.
 
 ---
 
@@ -115,12 +158,21 @@ If you prefer to deploy manually before setting up CI/CD:
 
 ### 2.1 Create Resource Group
 
+**Bash**
 ```bash
-az group create --name rg-fuelripple-dev --location eastus2
+az group create --name rg-fuelripple-dev --location <YOUR_REGION>
 ```
+
+**PowerShell**
+```powershell
+az group create --name rg-fuelripple-dev --location <YOUR_REGION>
+```
+
+> Replace `<YOUR_REGION>` with your Azure region (e.g. `westus3`, `eastus`, `centralus`). The Bicep deployment will inherit this location from the resource group, but you can also override it by setting `param location = 'your-region'` in your `.bicepparam` file.
 
 ### 2.2 Deploy Infrastructure
 
+**Bash**
 ```bash
 # Set environment variables for secrets
 export DB_PASSWORD="<your-strong-password>"
@@ -134,13 +186,28 @@ az deployment group create \
   --parameters infra/parameters/dev.bicepparam
 ```
 
+**PowerShell**
+```powershell
+# Set environment variables for secrets
+$env:DB_PASSWORD  = "<your-strong-password>"
+$env:EIA_API_KEY  = "<your-eia-key>"
+$env:FRED_API_KEY = "<your-fred-key>"
+
+# Deploy
+az deployment group create `
+  --resource-group rg-fuelripple-dev `
+  --template-file infra/main.bicep `
+  --parameters infra/parameters/dev.bicepparam
+```
+
 ### 2.3 Build and Push Docker Images
 
+**Bash**
 ```bash
 # Get ACR login server
-ACR_NAME=acrfuelrippledev
-az acr login --name $ACR_NAME
-ACR_SERVER=$(az acr show --name $ACR_NAME --query loginServer -o tsv)
+ACR=acrfuelrippledev
+az acr login --name $ACR
+ACR_SERVER=$(az acr show --name $ACR --query loginServer -o tsv)
 
 # Build from repo root (context is the monorepo root)
 docker build -f apps/api/Dockerfile -t $ACR_SERVER/fuelripple-api:latest .
@@ -151,8 +218,25 @@ docker push $ACR_SERVER/fuelripple-api:latest
 docker push $ACR_SERVER/fuelripple-web:latest
 ```
 
+**PowerShell**
+```powershell
+# Get ACR login server
+$ACR = "acrfuelrippledev"
+az acr login --name $ACR
+$ACR_SERVER = az acr show --name $ACR --query loginServer -o tsv
+
+# Build from repo root (context is the monorepo root)
+docker build -f apps/api/Dockerfile -t "$ACR_SERVER/fuelripple-api:latest" .
+docker build -f apps/web/Dockerfile -t "$ACR_SERVER/fuelripple-web:latest" .
+
+# Push
+docker push "$ACR_SERVER/fuelripple-api:latest"
+docker push "$ACR_SERVER/fuelripple-web:latest"
+```
+
 ### 2.4 Run Database Migrations
 
+**Bash**
 ```bash
 # Get the database FQDN from deployment output
 DB_FQDN=$(az deployment group show \
@@ -165,6 +249,19 @@ DATABASE_URL="postgresql://fuelripple:${DB_PASSWORD}@${DB_FQDN}:5432/gastracker?
   npm run db:migrate
 ```
 
+**PowerShell**
+```powershell
+# Get the database FQDN from deployment output
+$DB_FQDN = az deployment group show `
+  --resource-group rg-fuelripple-dev `
+  --name main `
+  --query properties.outputs.databaseFqdn.value -o tsv
+
+# Run migrations
+$env:DATABASE_URL = "postgresql://fuelripple:$($env:DB_PASSWORD)@${DB_FQDN}:5432/gastracker?sslmode=require"
+npm run db:migrate
+```
+
 ---
 
 ## 3. CI/CD Pipeline
@@ -173,18 +270,18 @@ The GitHub Actions workflow (`.github/workflows/deploy.yml`) automates the full 
 
 | Trigger | Environment |
 |---------|-------------|
-| Push to `develop` | dev |
-| Push to `main` | prod |
-| Manual dispatch | Selectable |
+| Push to `develop` (filtered to `apps/**`, `packages/**`, `infra/**`) | dev |
+| Push to `main` (same path filter) | prod |
+| Manual dispatch | Selectable, with optional custom image tag and `:latest` toggle |
 
-**Pipeline stages:**
+**Pipeline stages (linear gate: each job blocks the next):**
 
-1. **Setup** → Determine environment, image tag (git SHA)
-2. **Build** → Build API + Web Docker images in parallel, push to ACR
-3. **Infra** → Deploy/update Bicep templates
-4. **Deploy** → Update App Service containers to new image tag
-5. **Migrate** → Run Knex database migrations
-6. **Smoke Test** → Health check both API and Web endpoints
+1. **Test** → Full Turbo test suite with coverage; uploads artifact. Blocks everything else.
+2. **Setup** → Resolves environment, ACR host, resource group, and short-SHA image tag.
+3. **Build & Push** → Builds API and Web Dockerfiles in parallel using Buildx + GitHub Actions layer cache (`type=gha`); pushes `:<sha>` and `:latest` tags to ACR via `docker/build-push-action`. Writes a step summary per image.
+4. **Infra** → Deploys or updates Bicep template for the target environment.
+5. **Deploy** → Updates each App Service container image and restarts it; runs a retry health-check loop (10 attempts for API, 6 for Web) and writes a step summary with the live URL.
+6. **Migrate** → Runs Knex database migrations via `npm run db:migrate`.
 
 ---
 
@@ -265,7 +362,20 @@ The GitHub Actions workflow (`.github/workflows/deploy.yml`) automates the full 
 
 ### View Logs
 
+**Bash**
 ```bash
+# API logs
+az webapp log tail --name app-api-fuelripple-dev --resource-group rg-fuelripple-dev
+
+# Database logs
+az postgres flexible-server show --name psql-fuelripple-dev --resource-group rg-fuelripple-dev
+
+# ACI (Redis) logs — only if enableRedis=true
+az container logs --name aci-redis-fuelripple-dev --resource-group rg-fuelripple-dev
+```
+
+**PowerShell**
+```powershell
 # API logs
 az webapp log tail --name app-api-fuelripple-dev --resource-group rg-fuelripple-dev
 
@@ -278,12 +388,22 @@ az container logs --name aci-redis-fuelripple-dev --resource-group rg-fuelripple
 
 ### Health Checks
 
+**Bash**
 ```bash
 # API health
 curl https://app-api-fuelripple-dev.azurewebsites.net/health
 
 # Web
 curl -I https://app-web-fuelripple-dev.azurewebsites.net/
+```
+
+**PowerShell**
+```powershell
+# API health
+Invoke-RestMethod -Uri https://app-api-fuelripple-dev.azurewebsites.net/health
+
+# Web (check status code)
+(Invoke-WebRequest -Uri https://app-web-fuelripple-dev.azurewebsites.net/ -Method Head).StatusCode
 ```
 
 ### Common Issues
@@ -299,10 +419,21 @@ curl -I https://app-web-fuelripple-dev.azurewebsites.net/
 
 ## 7. Teardown
 
+**Bash**
 ```bash
 # Remove all resources for an environment
 az group delete --name rg-fuelripple-dev --yes --no-wait
 
 # Remove service principal (optional)
 az ad sp delete --id $(az ad sp list --display-name "sp-fuelripple-github" --query "[0].id" -o tsv)
+```
+
+**PowerShell**
+```powershell
+# Remove all resources for an environment
+az group delete --name rg-fuelripple-dev --yes --no-wait
+
+# Remove service principal (optional)
+$SP_ID = az ad sp list --display-name "sp-fuelripple-github" --query "[0].id" -o tsv
+az ad sp delete --id $SP_ID
 ```

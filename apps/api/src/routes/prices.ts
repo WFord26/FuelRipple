@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { PriceHistoryQuerySchema } from '@fuelripple/shared';
-import { getHistoricalPrices, getCurrentPrices, getPriceStats, getPriceChanges } from '@fuelripple/db';
+import { getHistoricalPrices, getCurrentPrices, getPriceStats, getPriceChanges, getSeasonalComparison } from '@fuelripple/db';
 import { cacheOrFetch } from '../services/cache';
 import { CACHE_TTL } from '@fuelripple/shared';
 import { AppError } from '../middleware/errorHandler';
@@ -206,6 +206,32 @@ router.get('/changes', async (req: Request, res: Response, next: NextFunction) =
         };
       },
       CACHE_TTL.WEEKLY_GAS
+    );
+
+    res.json({
+      status: 'success',
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/prices/seasonal
+ * Compare the current price against the 5-year seasonal average for the same
+ * ISO week. Returns a simple delta and %-above/below the norm.
+ */
+router.get('/seasonal', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const metric = (req.query.metric as string) || 'gas_regular';
+    const region = (req.query.region as string) || 'NUS';
+    const years  = parseInt((req.query.years as string) || '5', 10);
+
+    const data = await cacheOrFetch(
+      `prices:seasonal:${metric}:${region}:${years}`,
+      () => getSeasonalComparison(metric, region, years),
+      CACHE_TTL.WEEKLY_GAS,
     );
 
     res.json({

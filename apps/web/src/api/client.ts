@@ -104,6 +104,26 @@ export const getPriceChanges = async (metric = 'gas_regular', region = 'NUS') =>
   return response.data.data;
 };
 
+// Seasonal comparison (current price vs 5-year same-week average)
+export const getSeasonalComparison = async (metric = 'gas_regular', region = 'NUS', years = 5) => {
+  const response = await apiClient.get('/prices/seasonal', { params: { metric, region, years } });
+  return response.data.data as {
+    currentPrice: number;
+    seasonalAvg: number;
+    delta: number;
+    deltaPct: number;
+    isoWeek: number;
+    yearsIncluded: number;
+  } | null;
+};
+
+// Current crude oil price
+export const getCurrentCrudePrice = async () => {
+  const response = await apiClient.get('/prices/current', { params: { metric: 'crude_wti' } });
+  const data = response.data.data;
+  return data?.find((p: any) => p.region === 'US') ?? data?.[0] ?? null;
+};
+
 // Correlation price series (weekly crude + gas aligned by week for dual-axis charting)
 export const getCorrelationPriceSeries = async (region = 'US', weeks = 260) => {
   const response = await apiClient.get('/correlation/price-series', {

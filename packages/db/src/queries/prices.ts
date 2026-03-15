@@ -275,6 +275,72 @@ export async function getCorrelationSeries(options: {
 }
 
 /**
+ * Get a seasonal comparison: current price vs the average price for the same
+ * ISO week across the prior `years` years.  For example, if today is week 11
+ * of 2026 and years = 5, the baseline is the average of week-11 prices from
+ * 2021–2025.  Returns current price, seasonal average, delta, and percent
+ * above/below seasonal norm.
+ */
+export async function getSeasonalComparison(
+  metric: string,
+  region: string,
+  years: number = 5,
+): Promise<{
+  currentPrice: number;
+  seasonalAvg: number;
+  delta: number;
+  deltaPct: number;
+  isoWeek: number;
+  yearsIncluded: number;
+} | null> {
+  const knex = getKnex();
+
+  const result = await knex.raw(`
+    WITH current_price AS (
+      SELECT value, time, EXTRACT(WEEK FROM time)::int AS iso_week
+      FROM energy_prices
+      WHERE metric = ? AND region = ?
+      ORDER BY time DESC
+      LIMIT 1
+    ),
+    seasonal AS (
+      SELECT
+        AVG(ep.value) AS avg_price,
+        COUNT(DISTINCT EXTRACT(YEAR FROM ep.time))::int AS years_included
+      FROM energy_prices ep, current_price cp
+      WHERE ep.metric = ?
+        AND ep.region = ?
+        AND EXTRACT(WEEK FROM ep.time) = cp.iso_week
+        AND ep.time < DATE_TRUNC('year', cp.time)
+        AND ep.time >= DATE_TRUNC('year', cp.time) - INTERVAL '1 year' * ?
+    )
+    SELECT
+      cp.value       AS current_price,
+      cp.iso_week,
+      s.avg_price    AS seasonal_avg,
+      s.years_included
+    FROM current_price cp, seasonal s
+  `, [metric, region, metric, region, years]);
+
+  const row = result.rows[0];
+  if (!row || row.current_price == null || row.seasonal_avg == null) return null;
+
+  const current = parseFloat(row.current_price);
+  const avg = parseFloat(row.seasonal_avg);
+  const delta = current - avg;
+  const deltaPct = avg > 0 ? (delta / avg) * 100 : 0;
+
+  return {
+    currentPrice: current,
+    seasonalAvg: avg,
+    delta,
+    deltaPct,
+    isoWeek: row.iso_week,
+    yearsIncluded: row.years_included,
+  };
+}
+
+/**
  * Detect gaps in data collection
  */
 export async function detectDataGaps(

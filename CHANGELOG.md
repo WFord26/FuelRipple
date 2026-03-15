@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **WTI Crude Oil card** on the dashboard — displays latest WTI closing price with
+  pump-price sensitivity note ($10/bbl ≈ $0.25/gal), sourced from existing
+  `crude_wti` data in `energy_prices`
+- **Gasoline Inventory days-of-supply card** — shows estimated days of supply with a
+  z-score badge vs 52-week seasonal norm (color-coded orange/red below -1σ/-2σ);
+  consumes `/api/v1/supply/inventories`
+- **Seasonal Context card** — compares the current gas price against the 5-year
+  average for the same ISO week, showing the dollar and percentage delta
+  - New DB query `getSeasonalComparison()` in `@fuelripple/db`
+  - New API endpoint `GET /api/v1/prices/seasonal`
+  - New client helper `getSeasonalComparison()` in `apps/web/src/api/client.ts`
+- **Recent Market Events feed** — surfaces the 5 most recent `geo_events` rows on the
+  dashboard with impact direction badges (bullish/bearish), category labels, and dates
+- **Volatility badge** — inline next to the Disruption Score, showing annualized
+  volatility % and classification (calm / moderate / elevated / extreme)
+- **`getCurrentCrudePrice()` client helper** (`apps/web/src/api/client.ts`) — thin
+  wrapper around `/prices/current?metric=crude_wti`
+
+### Fixed
+- **CI/CD deploy workflow** — updated health-check URLs, removed Bicep infra job,
+  removed resource-group verification step, scoped dev deploys to push and prod to
+  `workflow_dispatch`
+
 ---
 
 ## [1.0.2] - 2026-03-15

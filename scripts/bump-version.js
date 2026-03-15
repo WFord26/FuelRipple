@@ -17,11 +17,17 @@
  * Targets:
  *   all (default), web, api
  *
+ * Options:
+ *   --preview    Preview the version changes without writing files or committing
+ *               (use --preview instead of --dry-run; npm intercepts --dry-run)
+ *
  * Examples:
- *   node scripts/bump-version.js pre-patch          # → 1.0.1-beta.0 for web + api + root
- *   node scripts/bump-version.js pre-minor api      # → 1.1.0-beta.0 for api + root
- *   node scripts/bump-version.js release            # strip beta suffix from web + api + root
- *   node scripts/bump-version.js patch              # → 1.0.1 for web + api + root
+ *   node scripts/bump-version.js pre-patch           # → 1.0.1-beta.0 for web + api + root
+ *   node scripts/bump-version.js pre-minor api       # → 1.1.0-beta.0 for api + root
+ *   node scripts/bump-version.js release             # strip beta suffix from web + api + root
+ *   node scripts/bump-version.js patch               # → 1.0.1 for web + api + root
+ *   node scripts/bump-version.js patch --preview     # preview only, no file changes
+ *   npm run version:beta:patch -- --preview          # via npm (-- required to pass flags through)
  *
  * Always writes the root package.json version to match the highest resulting
  * version, then stages all modified files and commits.
@@ -133,7 +139,8 @@ function semverCompare(a, b) {
 const VALID_TYPES = ['patch', 'minor', 'major', 'pre-patch', 'pre-minor', 'pre-major', 'release'];
 const VALID_TARGETS = ['web', 'api', 'all'];
 
-const args = process.argv.slice(2);
+const args = process.argv.slice(2).filter(a => a !== '--preview');
+const dryRun = process.argv.includes('--preview');
 const bumpType = args[0] || 'patch';
 const target = args[1] || 'all';
 
@@ -155,7 +162,7 @@ const appTargets = target === 'all' ? ['web', 'api'] : [target];
 // Perform bumps
 // ---------------------------------------------------------------------------
 const actionLabel = bumpType === 'release' ? 'Releasing (promoting beta → stable)' : `Bumping ${bumpType}`;
-console.log(`\n${actionLabel} for: ${appTargets.join(', ')} + root\n`);
+console.log(`\n${actionLabel} for: ${appTargets.join(', ')} + root${dryRun ? '  [PREVIEW — no files will be changed]' : ''}\n`);
 
 const changes = [];
 
@@ -164,8 +171,10 @@ for (const name of appTargets) {
   const pkg = readPkg(pkgPath);
   const oldVersion = pkg.version;
   const newVersion = bumpVersion(oldVersion, bumpType);
-  pkg.version = newVersion;
-  writePkg(pkgPath, pkg);
+  if (!dryRun) {
+    pkg.version = newVersion;
+    writePkg(pkgPath, pkg);
+  }
   changes.push({ name, pkgPath, oldVersion, newVersion });
 }
 
@@ -177,8 +186,10 @@ const highestNew = changes.reduce((acc, c) => {
 
 const rootPkg = readPkg(PKG_PATHS.root);
 const oldRootVersion = rootPkg.version;
-rootPkg.version = highestNew;
-writePkg(PKG_PATHS.root, rootPkg);
+if (!dryRun) {
+  rootPkg.version = highestNew;
+  writePkg(PKG_PATHS.root, rootPkg);
+}
 
 // ---------------------------------------------------------------------------
 // Print summary
@@ -205,15 +216,21 @@ const commitMsg = bumpType === 'release'
     ? `chore: bump version to ${highestNew} (beta)`
     : `chore: bump version to ${highestNew}`;
 
-try {
-  execSync(`git -C "${ROOT}" add ${relPaths.map(f => `"${f}"`).join(' ')}`, {
-    stdio: 'inherit',
-  });
-  execSync(`git -C "${ROOT}" commit -m "${commitMsg}"`, { stdio: 'inherit' });
-  console.log(`\nCommitted: ${commitMsg}\n`);
-} catch {
-  console.warn('\nWarning: file(s) updated but git stage/commit failed.');
-  console.warn('You may need to commit manually:\n');
-  console.warn(`  git add ${relPaths.join(' ')}`);
-  console.warn(`  git commit -m "${commitMsg}"\n`);
+if (dryRun) {
+  console.log('\n[PREVIEW] No files written. Would have committed:');
+  console.log(`  git add ${relPaths.join(' ')}`);
+  console.log(`  git commit -m "${commitMsg}"\n`);
+} else {
+  try {
+    execSync(`git -C "${ROOT}" add ${relPaths.map(f => `"${f}"`).join(' ')}`, {
+      stdio: 'inherit',
+    });
+    execSync(`git -C "${ROOT}" commit -m "${commitMsg}"`, { stdio: 'inherit' });
+    console.log(`\nCommitted: ${commitMsg}\n`);
+  } catch {
+    console.warn('\nWarning: file(s) updated but git stage/commit failed.');
+    console.warn('You may need to commit manually:\n');
+    console.warn(`  git add ${relPaths.join(' ')}`);
+    console.warn(`  git commit -m "${commitMsg}"\n`);
+  }
 }

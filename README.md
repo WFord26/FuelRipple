@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/WFord26/FuelRipple/actions/workflows/tests.yml/badge.svg)](https://github.com/WFord26/FuelRipple/actions/workflows/tests.yml)
 [![Build & Deploy](https://github.com/WFord26/FuelRipple/actions/workflows/deploy.yml/badge.svg)](https://github.com/WFord26/FuelRipple/actions/workflows/deploy.yml)
-![Version](https://img.shields.io/badge/version-1.0.1-blue)
+![Version](https://img.shields.io/badge/version-1.0.2-blue)
 
 **Live site:** [www.fuelripple.com](https://www.fuelripple.com)
 

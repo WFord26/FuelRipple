@@ -1,0 +1,184 @@
+# =============================================================================
+# FuelRipple — Release workflow
+#
+# Triggered by pushing a semver tag (e.g., git tag v1.2.3 && git push --tags)
+# or manually via workflow_dispatch.
+#
+# Jobs:
+#   1. release        — Creates a GitHub Release with auto-generated notes
+#   2. publish        — Builds & publishes @fuelripple/* packages to GitHub Packages
+#   3. docker-retag   — Retags :latest ACR images with :vX.Y.Z
+# =============================================================================
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag (e.g., v1.2.3)'
+        required: true
+
+env:
+  RESOURCE_GROUP: FuelRippleRG
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job: release
+  # Creates the GitHub Release from the tag.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+          echo "Releasing ${TAG}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: FuelRipple ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+  # ---------------------------------------------------------------------------
+  # Job: publish
+  # Builds @fuelripple/shared, @fuelripple/impact-engine, @fuelripple/db and
+  # publishes them to GitHub Packages.
+  #
+  # NOTE: GitHub Packages npm requires the package scope (@fuelripple) to match
+  # a GitHub org or user. Create a "fuelripple" GitHub org or change the scope
+  # to @wford26 in each package.json if needed.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish npm packages
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@fuelripple'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set version across packages
+        run: |
+          VERSION="${{ needs.release.outputs.version }}"
+          npm version "$VERSION" --workspace=packages/shared --no-git-tag-version
+          npm version "$VERSION" --workspace=packages/impact-engine --no-git-tag-version
+          npm version "$VERSION" --workspace=packages/db --no-git-tag-version
+
+      - name: Build packages
+        run: npx turbo run build --filter=@fuelripple/shared --filter=@fuelripple/impact-engine --filter=@fuelripple/db
+
+      - name: Pack packages (attach to release)
+        run: |
+          npm pack --workspace=packages/shared
+          npm pack --workspace=packages/impact-engine
+          npm pack --workspace=packages/db
+
+      - name: Upload tarballs to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release.outputs.tag }}
+          files: '*.tgz'
+
+      - name: Publish @fuelripple/shared
+        run: npm publish --workspace=packages/shared
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish @fuelripple/impact-engine
+        run: npm publish --workspace=packages/impact-engine
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish @fuelripple/db
+        run: npm publish --workspace=packages/db
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish summary
+        run: |
+          VERSION="${{ needs.release.outputs.version }}"
+          echo "### npm packages published :package:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`@fuelripple/shared@${VERSION}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`@fuelripple/impact-engine@${VERSION}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`@fuelripple/db@${VERSION}\`" >> $GITHUB_STEP_SUMMARY
+
+  # ---------------------------------------------------------------------------
+  # Job: docker-retag
+  # Pulls :latest from ACR and retags with :vX.Y.Z for immutable release images.
+  # ---------------------------------------------------------------------------
+  docker-retag:
+    name: Tag Docker images (${{ matrix.app }})
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    strategy:
+      matrix:
+        app: [api, web]
+
+    steps:
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_19B9CF6E5E8F4F62B5FD4D18E54C5600 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_2C00FBAC276C4F1ABC367E552374A0CA }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_43645EA172E34549B2664D9DDDEFE163 }}
+
+      - name: Log in to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Retag ${{ matrix.app }} image with release version
+        run: |
+          TAG="${{ needs.release.outputs.tag }}"
+          ACR="${{ secrets.ACR_LOGIN_SERVER }}"
+          IMAGE="${ACR}/fuelripple-${{ matrix.app }}"
+
+          docker pull "${IMAGE}:latest"
+          docker tag  "${IMAGE}:latest" "${IMAGE}:${TAG}"
+          docker push "${IMAGE}:${TAG}"
+
+          echo "### Docker image tagged :whale:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: \`${IMAGE}:${TAG}\`" >> $GITHUB_STEP_SUMMARY

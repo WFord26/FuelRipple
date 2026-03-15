@@ -23,6 +23,9 @@ import { initializeJobQueue } from './services/jobQueue';
 const app: Application = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust the first proxy (Azure Front Door / App Service)
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 

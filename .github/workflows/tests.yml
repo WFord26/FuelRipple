@@ -10,7 +10,7 @@ name: Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, beta, develop]
     paths:
       - 'apps/**'
       - 'packages/**'
@@ -18,7 +18,7 @@ on:
       - 'package-lock.json'
       - 'turbo.json'
   pull_request:
-    branches: [main, develop]
+    branches: [main, beta, develop]
 
 jobs:
   # ---------------------------------------------------------------------------

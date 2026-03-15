@@ -286,16 +286,7 @@ jobs:
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_43645EA172E34549B2664D9DDDEFE163 }}
 
       # -----------------------------------------------------------------------
-      # 3. Verify resource group exists
-      # -----------------------------------------------------------------------
-      - name: Verify resource group exists
-        run: |
-          az group show \
-            --name ${{ needs.setup.outputs.resource_group }} \
-            --output none
-
-      # -----------------------------------------------------------------------
-      # 4. Deploy Bicep template
+      # 3. Deploy Bicep template
       # -----------------------------------------------------------------------
       - name: Deploy Bicep template
         run: |

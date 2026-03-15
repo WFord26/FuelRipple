@@ -117,44 +117,6 @@ Visit http://localhost:5173 to see the dashboard.
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for required GitHub secrets and Azure setup.
 
-## Development Roadmap
-
-- [x] **Phase 1: Foundation** ✅
-  - [x] Turborepo monorepo with npm workspaces
-  - [x] PostgreSQL + TimescaleDB schema with hypertables and continuous aggregates
-  - [x] Express API with two-tier cache (LRU + Redis)
-  - [x] BullMQ data ingestion pipeline (EIA + FRED)
-  - [x] Consumer impact engine (fuel cost, disruption score, correlation)
-  - [x] React frontend with TailwindCSS and routing
-  - [x] CI/CD pipelines (GitHub Actions → Azure App Service)
-  - [x] Full test suite (Jest + Vitest across all packages)
-
-- [ ] **Phase 2: Core Dashboard**
-  - [ ] TradingView Lightweight Charts integration
-  - [ ] Interactive historical price visualization
-  - [ ] Regional comparison charts
-  - [ ] Geopolitical event markers
-
-- [ ] **Phase 3: Impact Engine**
-  - [ ] Interactive fuel cost calculator
-  - [ ] Disruption score visualization
-  - [ ] Volatility charting
-
-- [ ] **Phase 4: Correlation**
-  - [ ] Crude oil correlation charts
-  - [ ] Lag analysis visualization
-  - [ ] Rockets-and-feathers asymmetry display
-
-- [ ] **Phase 5: Downstream**
-  - [ ] Diesel-freight-CPI Sankey diagram
-  - [ ] BLS data integration
-  - [ ] Food price impact calculator
-
-- [ ] **Phase 6: Polish**
-  - [ ] US regional heatmap
-  - [ ] Mobile responsive design
-  - [ ] Performance optimization and monitoring
-
 ## License
 
 MIT

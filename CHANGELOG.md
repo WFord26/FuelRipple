@@ -25,6 +25,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   volatility % and classification (calm / moderate / elevated / extreme)
 - **`getCurrentCrudePrice()` client helper** (`apps/web/src/api/client.ts`) — thin
   wrapper around `/prices/current?metric=crude_wti`
+- **State detail page** (`/state/:stateAbbr`) — new route showing per-state gas price
+  breakdown with:
+  - Current price vs national and PADD regional averages (with % diff badges)
+  - Seasonal comparison against 5-year same-week average
+  - Price change cards (1 week, 1 month, 3 months, 1 year ago)
+  - Historical weekly price chart (PriceChart component)
+  - Annual household fuel cost calculated at the state price
+  - Visual price-position bars vs national, PADD, and seasonal averages
+  - Graceful fallback for states EIA doesn't report (shows PADD average as proxy)
+- **Clickable state map** — `USPriceMap` component now accepts `onStateClick` prop;
+  clicking any state on the Dashboard or Regional Comparison page navigates to
+  `/state/{abbr}`
 
 ### Fixed
 - **CI/CD deploy workflow** — updated health-check URLs, removed Bicep infra job,

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getCurrentPrices, getDisruptionScore, getTypicalImpact, getRegionalComparison, getPriceChanges, getSupplyHealth, getDownstreamImpact, getVolatility, getEvents, getSupplyInventories, getCurrentCrudePrice, getSeasonalComparison } from '../api/client';
 import DisruptionMeter from '../components/DisruptionMeter';
 import USPriceMap from '../components/USPriceMap';
@@ -33,6 +33,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 };
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   usePageSEO({
     title: 'US Gas Price Dashboard',
     description: 'Live US gasoline prices across all PADD regions and 50 states. Includes a Consumer Disruption Index, supply health alerts, and crude oil correlation. Data from EIA, FRED, and AAA.',
@@ -554,8 +555,9 @@ export default function Dashboard() {
 
       {/* Regional Breakdown */}
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-        <h3 className="text-xl font-bold text-white mb-4">Regional Prices</h3>
-        <USPriceMap comparisonData={comparisonData ?? []} height={380} />
+        <h3 className="text-xl font-bold text-white mb-2">Regional Prices</h3>
+        <p className="text-xs text-slate-500 mb-4">Click a state for detailed breakdown</p>
+        <USPriceMap comparisonData={comparisonData ?? []} height={380} onStateClick={(abbr) => navigate(`/state/${abbr}`)} />
       </div>
 
       {/* Cost Impact */}

@@ -57,9 +57,11 @@ export interface USPriceMapProps {
   }>;
   /** Height in pixels (default 420) */
   height?: number;
+  /** Optional callback when a state is clicked (receives 2-letter abbreviation) */
+  onStateClick?: (abbr: string) => void;
 }
 
-export default function USPriceMap({ comparisonData, height = 420 }: USPriceMapProps) {
+export default function USPriceMap({ comparisonData, height = 420, onStateClick }: USPriceMapProps) {
   const [topology, setTopology] = useState<Topology | null>(null);
   const [tooltip, setTooltip] = useState<{
     x: number; y: number;
@@ -220,6 +222,9 @@ export default function USPriceMap({ comparisonData, height = 420 }: USPriceMapP
                     setTooltip(prev => prev ? { ...prev, x: e.clientX - rect.left, y: e.clientY - rect.top } : null);
                   }}
                   onMouseLeave={() => setTooltip(null)}
+                  onClick={() => {
+                    if (abbr && onStateClick) onStateClick(abbr);
+                  }}
                 />
               );
             })

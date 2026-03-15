@@ -1,6 +1,6 @@
 {
   "name": "fuelripple",
-  "version": "1.0.1-beta.0",
+  "version": "1.0.1-beta.1",
   "private": true,
   "description": "US Gas Price Tracker & Consumer Disruption Index",
   "packageManager": "npm@10.0.0",

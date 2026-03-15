@@ -299,7 +299,7 @@ jobs:
 
       - name: Run database migrations
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: postgresql://fuelripple:${{ secrets.DB_PASSWORD }}@psql-fuelripple-wford-${{ needs.setup.outputs.environment }}.postgres.database.azure.com:5432/gastracker?sslmode=require
         run: npm run db:migrate
 
       - name: Migration summary

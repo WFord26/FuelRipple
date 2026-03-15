@@ -220,9 +220,9 @@ jobs:
       matrix:
         include:
           - app: api
-            health_path: /health
+            health_url: https://api.fuelripple.com/health
           - app: web
-            health_path: /
+            health_url: https://www.fuelripple.com/
 
     steps:
       - name: Azure login
@@ -253,15 +253,7 @@ jobs:
 
       - name: Health check
         run: |
-          ENV="${{ needs.setup.outputs.environment }}"
-          APP_NAME="app-${{ matrix.app }}-fuelripple-wford-${ENV}"
-          FQDN=$(az webapp show \
-            --name "$APP_NAME" \
-            --resource-group "${{ env.RESOURCE_GROUP }}" \
-            --query "defaultHostName" \
-            --output tsv)
-
-          URL="https://${FQDN}${{ matrix.health_path }}"
+          URL="${{ matrix.health_url }}"
           echo "Health checking $URL ..."
           sleep 20
 

@@ -5,7 +5,12 @@ import { Knex } from 'knex';
  * Primary time-series table for gas, crude oil, and diesel prices
  */
 export async function up(knex: Knex): Promise<void> {
-  // Create energy_prices table
+  // Enable TimescaleDB extension (requires shared_preload_libraries = 'timescaledb' on the server)
+  await knex.raw(`CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;`);
+
+  // Create energy_prices table (guard against partial prior runs)
+  const tableExists = await knex.schema.hasTable('energy_prices');
+  if (!tableExists) {
   await knex.schema.createTable('energy_prices', (table) => {
     table.timestamp('time', { useTz: true }).notNullable();
     table.text('source').notNullable();
@@ -23,6 +28,7 @@ export async function up(knex: Knex): Promise<void> {
       indexName: 'uq_energy_prices',
     });
   });
+  } // end if (!tableExists)
 
   // Convert to TimescaleDB hypertable
   await knex.raw(`
@@ -34,23 +40,10 @@ export async function up(knex: Knex): Promise<void> {
     );
   `);
 
-  // Enable compression
-  await knex.raw(`
-    ALTER TABLE energy_prices SET (
-      timescaledb.compress,
-      timescaledb.compress_segmentby = 'metric, region',
-      timescaledb.compress_orderby = 'time DESC'
-    );
-  `);
-
-  // Add compression policy for data older than 6 months
-  await knex.raw(`
-    SELECT add_compression_policy(
-      'energy_prices',
-      INTERVAL '6 months',
-      if_not_exists => TRUE
-    );
-  `);
+  // Note: TimescaleDB native compression (timescaledb.compress) requires the
+  // Timescale License and is not available on Azure Database for PostgreSQL
+  // (Apache-licensed build). PostgreSQL table partitioning via hypertable
+  // chunks provides equivalent storage efficiency for this workload.
 }
 
 export async function down(knex: Knex): Promise<void> {

@@ -40,22 +40,8 @@ export async function up(knex: Knex): Promise<void> {
     );
   `);
 
-  // Enable compression (compress data older than 6 months)
-  await knex.raw(`
-    ALTER TABLE refinery_operations SET (
-      timescaledb.compress,
-      timescaledb.compress_segmentby = 'region',
-      timescaledb.compress_orderby = 'time DESC'
-    );
-  `);
-
-  await knex.raw(`
-    SELECT add_compression_policy(
-      'refinery_operations',
-      INTERVAL '6 months',
-      if_not_exists => TRUE
-    );
-  `);
+  // Note: timescaledb.compress requires the Timescale License and is not
+  // available on Azure Database for PostgreSQL (Apache-licensed build).
 }
 
 export async function down(knex: Knex): Promise<void> {

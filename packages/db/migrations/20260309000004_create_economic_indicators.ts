@@ -27,23 +27,8 @@ export async function up(knex: Knex): Promise<void> {
     );
   `);
 
-  // Enable compression
-  await knex.raw(`
-    ALTER TABLE economic_indicators SET (
-      timescaledb.compress,
-      timescaledb.compress_segmentby = 'indicator',
-      timescaledb.compress_orderby = 'time DESC'
-    );
-  `);
-
-  // Add compression policy
-  await knex.raw(`
-    SELECT add_compression_policy(
-      'economic_indicators',
-      INTERVAL '6 months',
-      if_not_exists => TRUE
-    );
-  `);
+  // Note: timescaledb.compress requires the Timescale License and is not
+  // available on Azure Database for PostgreSQL (Apache-licensed build).
 }
 
 export async function down(knex: Knex): Promise<void> {

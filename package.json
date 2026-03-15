@@ -1,6 +1,6 @@
 {
   "name": "fuelripple",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "US Gas Price Tracker & Consumer Disruption Index",
   "packageManager": "npm@10.0.0",
@@ -20,7 +20,22 @@
     "db:migrate": "npm run --workspace=@fuelripple/db migrate",
     "db:seed": "npm run --workspace=@fuelripple/db seed",
     "db:backfill": "npm run backfill --workspace=@fuelripple/api",
-    "backfill": "npm run backfill --workspace=@fuelripple/api"
+    "backfill": "npm run backfill --workspace=@fuelripple/api",
+    "version:patch": "node scripts/bump-version.js patch",
+    "version:minor": "node scripts/bump-version.js minor",
+    "version:major": "node scripts/bump-version.js major",
+    "version:patch:api": "node scripts/bump-version.js patch api",
+    "version:patch:web": "node scripts/bump-version.js patch web",
+    "version:minor:api": "node scripts/bump-version.js minor api",
+    "version:minor:web": "node scripts/bump-version.js minor web",
+    "version:beta:patch": "node scripts/bump-version.js pre-patch",
+    "version:beta:minor": "node scripts/bump-version.js pre-minor",
+    "version:beta:major": "node scripts/bump-version.js pre-major",
+    "version:beta:patch:api": "node scripts/bump-version.js pre-patch api",
+    "version:beta:patch:web": "node scripts/bump-version.js pre-patch web",
+    "version:release": "node scripts/bump-version.js release",
+    "version:release:api": "node scripts/bump-version.js release api",
+    "version:release:web": "node scripts/bump-version.js release web"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

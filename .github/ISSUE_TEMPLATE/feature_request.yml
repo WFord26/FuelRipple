@@ -1,0 +1,66 @@
+name: Feature Request
+description: Propose a new feature or improvement
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement! Please describe your idea clearly so we can evaluate it in the context of FuelRipple's goals: tracking US gas prices and translating price volatility into household-level cost impacts.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What problem does this solve, or what need does it address?
+      placeholder: "I'm frustrated when... / It would be helpful if..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe your idea and how it would work.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area of the codebase
+      options:
+        - Frontend (apps/web)
+        - API / new endpoint (apps/api)
+        - Impact engine calculation (packages/impact-engine)
+        - New data source or EIA/FRED series
+        - Database / schema change (packages/db)
+        - Shared types / schemas (packages/shared)
+        - Infrastructure / deployment
+        - Documentation
+        - Not sure / multiple areas
+    validations:
+      required: true
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Would this be a breaking change?
+      options:
+        - "No"
+        - "Yes — API or schema change"
+        - "Yes — shared type change"
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any other approaches you thought about, and why you prefer your proposed solution.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Mockups, links to reference data sources, relevant docs sections, etc.

@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { getWeeklyChanges } from '@fuelripple/db';
 import { calculateDisruptionScore, calculateAnnualizedVolatility, getVolatilityClassification } from '@fuelripple/impact-engine';
 import { cacheOrFetch } from '../services/cache';
+import { AppError } from '../middleware/errorHandler';
 import { CACHE_TTL } from '@fuelripple/shared';
 import { mapRegion } from '../utils/regionMapper';
 
@@ -23,7 +24,7 @@ router.get('/score', async (req: Request, res: Response, next: NextFunction) => 
         const changes = await getWeeklyChanges(metric, region, 52);
         
         if (changes.length < 2) {
-          throw new Error('Insufficient data to calculate disruption score');
+          throw new AppError('Insufficient data to calculate disruption score — run the historical backfill first', 503);
         }
         
         // Get current and previous week prices
@@ -65,7 +66,7 @@ router.get('/volatility', async (req: Request, res: Response, next: NextFunction
         const changes = await getWeeklyChanges(metric, region, window);
         
         if (changes.length < 2) {
-          throw new Error('Insufficient data to calculate volatility');
+          throw new AppError('Insufficient data to calculate volatility — run the historical backfill first', 503);
         }
         
         const pctChanges = changes

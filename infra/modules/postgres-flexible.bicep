@@ -59,7 +59,17 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-pr
   }
 }
 
-// Enable TimescaleDB extension
+// Allow TimescaleDB extension — must be set before CREATE EXTENSION is called
+resource timescaleAllowlist 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2023-06-01-preview' = {
+  parent: postgresServer
+  name: 'azure.extensions'
+  properties: {
+    value: 'TIMESCALEDB'
+    source: 'user-override'
+  }
+}
+
+// Preload TimescaleDB shared library (depends on allowlist being set first)
 resource timescaleExtConfig 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2023-06-01-preview' = {
   parent: postgresServer
   name: 'shared_preload_libraries'
@@ -67,6 +77,7 @@ resource timescaleExtConfig 'Microsoft.DBforPostgreSQL/flexibleServers/configura
     value: 'timescaledb'
     source: 'user-override'
   }
+  dependsOn: [timescaleAllowlist]
 }
 
 // Allow Azure services to connect (when not using VNet)

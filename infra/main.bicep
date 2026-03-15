@@ -129,6 +129,7 @@ module appService 'modules/app-service.bicep' = {
     fredApiKey: fredApiKey
     environment: environment
     frontDoorId: enableFrontDoor ? (frontDoor.?outputs.frontDoorId ?? '') : ''
+    corsOrigin: enableFrontDoor ? (frontDoor.?outputs.frontDoorUrl ?? '') : ''
   }
 }
 
@@ -142,3 +143,15 @@ output redisEnabled bool = enableRedis
 output databaseConnectionString string = database.outputs.connectionString
 output frontDoorEnabled bool = enableFrontDoor
 output frontDoorUrl string = enableFrontDoor ? (frontDoor.?outputs.frontDoorUrl ?? '') : ''
+output frontDoorEndpointCname string = enableFrontDoor ? (frontDoor.?outputs.endpointCname ?? '') : ''
+
+// DNS setup — create these records at your registrar after deployment
+// CNAME  www           → <frontDoorEndpointCname>
+// ALIAS  @             → <frontDoorEndpointCname>  (or CNAME if provider supports apex)
+// CNAME  api           → <frontDoorEndpointCname>
+// TXT    _dnsauth.www  → <wwwValidationToken>
+// TXT    _dnsauth      → <apexValidationToken>      (apex = no subdomain prefix)
+// TXT    _dnsauth.api  → <apiValidationToken>
+output wwwValidationToken string = enableFrontDoor ? (frontDoor.?outputs.wwwValidationToken ?? '') : ''
+output apexValidationToken string = enableFrontDoor ? (frontDoor.?outputs.apexValidationToken ?? '') : ''
+output apiValidationToken string = enableFrontDoor ? (frontDoor.?outputs.apiValidationToken ?? '') : ''

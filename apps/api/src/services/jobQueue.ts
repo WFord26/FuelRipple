@@ -4,7 +4,7 @@ import { fetchAllGasPrices, fetchDieselPrices, fetchRefineryUtilization, fetchRe
 import { fetchCrudeQuotes } from './marketClient';
 import { fetchEconomicIndicators } from './fredClient';
 import { fetchAllStatePrices } from './aaaClient';
-import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData } from '@fuelripple/db';
+import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData, refreshMaterializedViews } from '@fuelripple/db';
 import type { RefineryOperationsRow, CapacityRow } from '@fuelripple/db';
 import { EnergyPrice, EconomicIndicator } from '@fuelripple/shared';
 import { abbrToDuoarea } from '../utils/regionMapper';
@@ -261,6 +261,7 @@ async function processGasPrices(): Promise<void> {
   console.log(`Prepared ${prices.length} price records for insertion`);
   await insertPrices(prices);
   console.log(`✅ Inserted ${prices.length} gas price records`);
+  await refreshMaterializedViews();
 }
 
 /**
@@ -326,6 +327,7 @@ async function processDieselPrices(): Promise<void> {
 
   await insertPrices(prices);
   console.log(`✅ Inserted ${prices.length} diesel price records`);
+  await refreshMaterializedViews();
 }
 
 /**
@@ -449,6 +451,7 @@ async function processAAAPrices(): Promise<void> {
   console.log(`Prepared ${prices.length} AAA price records for insertion`);
   await insertPrices(prices);
   console.log(`✅ Inserted ${prices.length} AAA price records`);
+  await refreshMaterializedViews();
 }
 
 /**

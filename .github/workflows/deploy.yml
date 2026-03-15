@@ -273,18 +273,6 @@ jobs:
           echo "WARNING: ${{ matrix.app }} health check did not return 200 after 10 attempts."
           exit 1
 
-      - name: Purge Azure Front Door cache (web only)
-        if: matrix.app == 'web'
-        run: |
-          az afd endpoint purge \
-            --resource-group "${{ env.RESOURCE_GROUP }}" \
-            --profile-name "afd-fuelripple-wford-${{ needs.setup.outputs.environment }}" \
-            --endpoint-name "ep-fuelripple-wford-${{ needs.setup.outputs.environment }}" \
-            --domains www.fuelripple.com fuelripple.com \
-            --content-paths "/*" \
-            --output none
-          echo "### AFD cache purged :broom:" >> $GITHUB_STEP_SUMMARY
-
   # ---------------------------------------------------------------------------
   # Job: migrate
   # Runs Knex database migrations after containers are live.

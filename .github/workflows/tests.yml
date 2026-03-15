@@ -10,7 +10,7 @@ name: Tests
 
 on:
   push:
-    branches: [main, beta, develop]
+    branches: [beta, develop]
     paths:
       - 'apps/**'
       - 'packages/**'

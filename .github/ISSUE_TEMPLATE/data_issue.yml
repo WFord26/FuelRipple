@@ -1,0 +1,61 @@
+name: Data Issue
+description: Incorrect, stale, or missing price/indicator data
+labels: ["data", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for problems with the data shown by FuelRipple — wrong values, missing series, stale prices, or broken scrapers/API clients.
+
+  - type: dropdown
+    id: data-source
+    attributes:
+      label: Affected data source
+      options:
+        - EIA — US regular gasoline (weekly)
+        - EIA — WTI crude (daily)
+        - EIA — On-highway diesel (weekly)
+        - EIA — Refinery utilization
+        - EIA — Gasoline/distillate stocks
+        - FRED — WTI crude (DCOILWTICO)
+        - FRED — Other series
+        - AAA scraper
+        - Consumer Disruption Index calculation
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the data problem
+      description: What data is wrong, missing, or stale? Include the metric name, region, and time range if known.
+    validations:
+      required: true
+
+  - type: input
+    id: expected-value
+    attributes:
+      label: Expected value or range
+      placeholder: "e.g. ~$3.45/gal for week of 2026-03-09 (EIA published $3.48)"
+
+  - type: input
+    id: actual-value
+    attributes:
+      label: Actual value shown in FuelRipple
+      placeholder: "e.g. $3.12/gal or 'No data'"
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Navigate to the Prices page
+        2. Select date range ...
+        3. Observe incorrect value in ...
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Links to official EIA/FRED pages showing the correct data, screenshots, etc.

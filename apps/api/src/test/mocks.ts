@@ -1,7 +1,5 @@
 import { jest } from '@jest/globals';
 
-import { jest } from '@jest/globals';
-
 /**
  * Mock Express Request/Response utilities
  */
@@ -22,7 +20,7 @@ export const createMockExpressApp = () => {
  */
 export const createMockDBConnection = () => {
   return {
-    query: jest.fn().mockResolvedValue({ rows: [] }),
+    query: jest.fn().mockResolvedValue({ rows: [] as unknown[] }),
     release: jest.fn(),
   };
 };
@@ -31,24 +29,24 @@ export const createMockDBConnection = () => {
  * Mock Redis client
  */
 export const createMockRedisClient = () => {
-  const cache = new Map();
-  
+  const cache = new Map<string, unknown>();
+
   return {
-    get: jest.fn().mockImplementation((key: string) =>
-      Promise.resolve(cache.get(key))
+    get: jest.fn().mockImplementation((...args: unknown[]) =>
+      Promise.resolve(cache.get(args[0] as string))
     ),
-    set: jest.fn().mockImplementation((key: string, value: any) => {
-      cache.set(key, value);
-      return Promise.resolve('OK');
+    set: jest.fn().mockImplementation((...args: unknown[]) => {
+      cache.set(args[0] as string, args[1]);
+      return Promise.resolve('OK' as unknown);
     }),
-    del: jest.fn().mockImplementation((key: string) => {
-      cache.delete(key);
+    del: jest.fn().mockImplementation((...args: unknown[]) => {
+      cache.delete(args[0] as string);
       return Promise.resolve(1);
     }),
-    exists: jest.fn().mockImplementation((key: string) =>
-      Promise.resolve(cache.has(key) ? 1 : 0)
+    exists: jest.fn().mockImplementation((...args: unknown[]) =>
+      Promise.resolve(cache.has(args[0] as string) ? 1 : 0)
     ),
-    flushDir: jest.fn().mockResolvedValue('OK'),
+    flushAll: jest.fn().mockResolvedValue('OK' as unknown),
   };
 };
 
@@ -57,17 +55,17 @@ export const createMockRedisClient = () => {
  */
 export const createMockEIAClient = () => {
   return {
-    fetchPrices: jest.fn().mockResolvedValue([]),
-    fetchSupply: jest.fn().mockResolvedValue([]),
-    fetchCapacity: jest.fn().mockResolvedValue([]),
+    fetchPrices: jest.fn().mockResolvedValue([] as unknown[]),
+    fetchSupply: jest.fn().mockResolvedValue([] as unknown[]),
+    fetchCapacity: jest.fn().mockResolvedValue([] as unknown[]),
   };
 };
 
 export const createMockFREDClient = () => {
   return {
-    fetchInflation: jest.fn().mockResolvedValue([]),
-    fetchUnemployment: jest.fn().mockResolvedValue([]),
-    fetchGDP: jest.fn().mockResolvedValue([]),
+    fetchInflation: jest.fn().mockResolvedValue([] as unknown[]),
+    fetchUnemployment: jest.fn().mockResolvedValue([] as unknown[]),
+    fetchGDP: jest.fn().mockResolvedValue([] as unknown[]),
   };
 };
 
@@ -89,7 +87,7 @@ export const createMockCron = () => {
  */
 export const createMockJobQueue = () => {
   return {
-    add: jest.fn().mockResolvedValue({ id: '1' }),
+    add: jest.fn().mockResolvedValue({ id: '1' } as unknown),
     process: jest.fn(),
     on: jest.fn(),
     close: jest.fn(),

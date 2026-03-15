@@ -5,10 +5,14 @@ import { Knex } from 'knex';
  * Weekly, monthly, and daily aggregates with automatic refresh
  */
 export async function up(knex: Knex): Promise<void> {
-  // Weekly averages continuous aggregate
+  // Note: timescaledb.continuous materialized views and add_continuous_aggregate_policy
+  // require the Timescale License and are not available on Azure Database for PostgreSQL
+  // (Apache-licensed build). Using standard PostgreSQL materialized views with time_bucket
+  // instead — refresh manually or via a scheduled job (e.g. pg_cron or BullMQ cron).
+
+  // Weekly averages
   await knex.raw(`
-    CREATE MATERIALIZED VIEW weekly_prices
-    WITH (timescaledb.continuous) AS
+    CREATE MATERIALIZED VIEW weekly_prices AS
     SELECT
       time_bucket('7 days', time) AS bucket,
       metric,
@@ -19,26 +23,13 @@ export async function up(knex: Knex): Promise<void> {
       STDDEV(value) AS stddev_price,
       COUNT(*) AS sample_count
     FROM energy_prices
-    GROUP BY bucket, metric, region
-    WITH NO DATA;
+    GROUP BY bucket, metric, region;
   `);
+  await knex.raw(`CREATE INDEX ON weekly_prices (metric, region, bucket DESC);`);
 
-  // Add refresh policy for weekly aggregate (refresh every 24 hours)
-  // start_offset covers the full backfill window so historical loads are picked up
+  // Monthly averages
   await knex.raw(`
-    SELECT add_continuous_aggregate_policy(
-      'weekly_prices',
-      start_offset => INTERVAL '10 years',
-      end_offset => INTERVAL '1 day',
-      schedule_interval => INTERVAL '24 hours',
-      if_not_exists => TRUE
-    );
-  `);
-
-  // Monthly averages continuous aggregate
-  await knex.raw(`
-    CREATE MATERIALIZED VIEW monthly_prices
-    WITH (timescaledb.continuous) AS
+    CREATE MATERIALIZED VIEW monthly_prices AS
     SELECT
       time_bucket('30 days', time) AS bucket,
       metric,
@@ -49,25 +40,13 @@ export async function up(knex: Knex): Promise<void> {
       STDDEV(value) AS stddev_price,
       COUNT(*) AS sample_count
     FROM energy_prices
-    GROUP BY bucket, metric, region
-    WITH NO DATA;
+    GROUP BY bucket, metric, region;
   `);
+  await knex.raw(`CREATE INDEX ON monthly_prices (metric, region, bucket DESC);`);
 
-  // Add refresh policy for monthly aggregate
+  // Daily averages
   await knex.raw(`
-    SELECT add_continuous_aggregate_policy(
-      'monthly_prices',
-      start_offset => INTERVAL '10 years',
-      end_offset => INTERVAL '1 day',
-      schedule_interval => INTERVAL '24 hours',
-      if_not_exists => TRUE
-    );
-  `);
-
-  // Daily averages continuous aggregate
-  await knex.raw(`
-    CREATE MATERIALIZED VIEW daily_prices
-    WITH (timescaledb.continuous) AS
+    CREATE MATERIALIZED VIEW daily_prices AS
     SELECT
       time_bucket('1 day', time) AS bucket,
       metric,
@@ -77,20 +56,9 @@ export async function up(knex: Knex): Promise<void> {
       MAX(value) AS max_price,
       COUNT(*) AS sample_count
     FROM energy_prices
-    GROUP BY bucket, metric, region
-    WITH NO DATA;
+    GROUP BY bucket, metric, region;
   `);
-
-  // Add refresh policy for daily aggregate
-  await knex.raw(`
-    SELECT add_continuous_aggregate_policy(
-      'daily_prices',
-      start_offset => INTERVAL '10 years',
-      end_offset => INTERVAL '1 hour',
-      schedule_interval => INTERVAL '6 hours',
-      if_not_exists => TRUE
-    );
-  `);
+  await knex.raw(`CREATE INDEX ON daily_prices (metric, region, bucket DESC);`);
 }
 
 export async function down(knex: Knex): Promise<void> {

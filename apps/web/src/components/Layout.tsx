@@ -100,7 +100,15 @@ export default function Layout() {
       <footer className="bg-slate-800 border-t border-slate-700 mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <p className="text-center text-slate-400 text-sm">
-            Data sources: EIA, FRED | Built with React + Node + TimescaleDB
+            Data sources: EIA, FRED | Built with React + Node + TimescaleDB |{' '}
+            <a
+              href="https://github.com/WFord26/FuelRipple"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-slate-200 underline"
+            >
+              GitHub
+            </a>
           </p>
         </div>
       </footer>

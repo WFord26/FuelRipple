@@ -1,17 +1,36 @@
+# =============================================================================
+# tests.yml
+# Runs the full test suite (all workspaces via Turbo) on every PR and push.
+# Spins up Postgres + Redis service containers for API integration tests.
+# The deploy.yml workflow gates on its own embedded test job; this workflow
+# provides early feedback on PRs before images are built.
+# =============================================================================
+
 name: Tests
 
 on:
   push:
     branches: [main, develop]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'turbo.json'
   pull_request:
     branches: [main, develop]
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Job: test
+  # Runs the full Turbo test suite with coverage. Spins up Postgres + Redis
+  # service containers to support integration tests in apps/api.
+  # ---------------------------------------------------------------------------
   test:
+    name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20.x]
+    permissions:
+      contents: read
 
     services:
       postgres:
@@ -39,65 +58,125 @@ jobs:
           - 6379:6379
 
     steps:
-      - name: Checkout code
+      # -----------------------------------------------------------------------
+      # 1. Checkout
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      # -----------------------------------------------------------------------
+      # 2. Set up Node.js with npm cache
+      # -----------------------------------------------------------------------
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '20'
           cache: 'npm'
 
+      # -----------------------------------------------------------------------
+      # 3. Install dependencies (clean install from lockfile)
+      # -----------------------------------------------------------------------
       - name: Install dependencies
         run: npm ci
 
-      - name: Run linter
-        run: npm run lint
-
-      - name: Run tests
-        run: npm test
+      # -----------------------------------------------------------------------
+      # 4. Run tests with coverage across all workspaces
+      # -----------------------------------------------------------------------
+      - name: Run tests with coverage
+        run: npm run test:coverage
         env:
           DATABASE_URL: postgres://test_user:test_password@localhost:5432/fuelripple_test
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
 
-      - name: Generate coverage reports
-        run: npm run test:coverage
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          fail_ci_if_error: false
-          verbose: true
-          flags: unittests
-          name: codecov-umbrella
-
-      - name: Archive test results
+      # -----------------------------------------------------------------------
+      # 5. Upload coverage report as artifact
+      # -----------------------------------------------------------------------
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v3
         with:
-          name: test-results
+          name: coverage-report
           path: coverage/
+          retention-days: 14
 
-  build:
-    needs: test
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job: test
+  # Runs the full Turbo test suite with coverage. Spins up Postgres + Redis
+  # service containers to support integration tests in apps/api.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20.x]
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: fuelripple_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
 
     steps:
-      - name: Checkout code
+      # -----------------------------------------------------------------------
+      # 1. Checkout
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      # -----------------------------------------------------------------------
+      # 2. Set up Node.js with npm cache
+      # -----------------------------------------------------------------------
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '20'
           cache: 'npm'
 
+      # -----------------------------------------------------------------------
+      # 3. Install dependencies (clean install from lockfile)
+      # -----------------------------------------------------------------------
       - name: Install dependencies
         run: npm ci
 
-      - name: Build packages
-        run: npm run build
+      # -----------------------------------------------------------------------
+      # 4. Run tests with coverage across all workspaces
+      # -----------------------------------------------------------------------
+      - name: Run tests with coverage
+        run: npm run test:coverage
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/fuelripple_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+
+      # -----------------------------------------------------------------------
+      # 5. Upload coverage report as artifact
+      # -----------------------------------------------------------------------
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14

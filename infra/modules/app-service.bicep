@@ -26,6 +26,9 @@ param environment string
 @description('Azure Front Door ID for access restriction. Empty string means Front Door is disabled.')
 param frontDoorId string = ''
 
+@description('CORS allowed origin. Defaults to the web App Service URL if not set.')
+param corsOrigin string = ''
+
 // App Service Plan (Linux)
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-01-01' = {
   name: 'plan-${suffix}'
@@ -60,6 +63,7 @@ resource apiApp 'Microsoft.Web/sites@2023-01-01' = {
     httpsOnly: true
     siteConfig: {
       linuxFxVersion: 'DOCKER|${acrLoginServer}/fuelripple-api:${apiImageTag}'
+      acrUseManagedIdentityCreds: true
       alwaysOn: true
       healthCheckPath: '/health'
       ftpsState: 'Disabled'
@@ -126,7 +130,7 @@ resource apiApp 'Microsoft.Web/sites@2023-01-01' = {
         }
         {
           name: 'CORS_ORIGIN'
-          value: 'https://app-web-${suffix}.azurewebsites.net'
+          value: corsOrigin != '' ? corsOrigin : 'https://app-web-${suffix}.azurewebsites.net'
         }
         {
           name: 'ENVIRONMENT'
@@ -225,6 +229,7 @@ resource webApp 'Microsoft.Web/sites@2023-01-01' = {
     httpsOnly: true
     siteConfig: {
       linuxFxVersion: 'DOCKER|${acrLoginServer}/fuelripple-web:${webImageTag}'
+      acrUseManagedIdentityCreds: true
       alwaysOn: true
       healthCheckPath: '/'
       ftpsState: 'Disabled'

@@ -1,13 +1,34 @@
-# ============================================================
-# FuelRipple — Build, Push to ACR, Deploy to Azure App Service
-# Triggers on push to main (prod) and develop (dev)
-# ============================================================
+# =============================================================================
+# deploy.yml
+# Builds API + Web Docker images, pushes to ACR, deploys to Azure App Service.
+#
+# Required GitHub Secrets (set at the Repository level):
+#   ACR_LOGIN_SERVER                    — e.g. acrfuelripplewforddev.azurecr.io
+#   ACR_USERNAME                        — ACR admin username
+#   ACR_PASSWORD                        — ACR admin password
+#   AZUREAPPSERVICE_CLIENTID_*          — Service principal App ID (OIDC)
+#   AZUREAPPSERVICE_TENANTID_*          — Azure AD tenant ID
+#   AZUREAPPSERVICE_SUBSCRIPTIONID_*    — Azure subscription ID
+#   DB_PASSWORD                         — PostgreSQL admin password
+#   DATABASE_URL                        — Full PostgreSQL connection string (migrations)
+#   EIA_API_KEY                         — EIA data API key
+#   FRED_API_KEY                        — FRED economic data API key
+# =============================================================================
 
 name: Build & Deploy
 
 on:
   push:
-    branches: [main, develop]
+    branches:
+      - main
+      - develop
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'infra/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'turbo.json'
   workflow_dispatch:
     inputs:
       environment:
@@ -18,29 +39,126 @@ on:
         options:
           - dev
           - prod
-
-permissions:
-  id-token: write   # OIDC for Azure login
-  contents: read
+      image_tag:
+        description: 'Custom image tag (defaults to git SHA)'
+        required: false
+        default: ''
+      push_latest:
+        description: 'Also tag and push as :latest'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 env:
-  ACR_NAME_DEV: acrfuelrippledev
-  ACR_NAME_PROD: acrfuelrippleprod
-  RESOURCE_GROUP_DEV: rg-fuelripple-dev
-  RESOURCE_GROUP_PROD: rg-fuelripple-prod
+  ACR_NAME_DEV: acrfuelripplewforddev
+  ACR_NAME_PROD: acrfuelripplewfordprod
+  RESOURCE_GROUP_DEV: FuelRippleRG
+  RESOURCE_GROUP_PROD: FuelRippleRG-prod
 
 jobs:
-  # ─── Determine environment ───
-  setup:
+  # ---------------------------------------------------------------------------
+  # Job: test
+  # Runs the full Turbo test suite with coverage. Must pass before images build.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test
     runs-on: ubuntu-latest
-    outputs:
-      environment: ${{ steps.env.outputs.environment }}
-      acr_name: ${{ steps.env.outputs.acr_name }}
-      resource_group: ${{ steps.env.outputs.resource_group }}
-      image_tag: ${{ steps.env.outputs.image_tag }}
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: fuelripple_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
     steps:
-      - name: Determine environment
-        id: env
+      # -----------------------------------------------------------------------
+      # 1. Checkout
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # 2. Set up Node.js with npm cache
+      # -----------------------------------------------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # -----------------------------------------------------------------------
+      # 3. Install dependencies (clean install from lockfile)
+      # -----------------------------------------------------------------------
+      - name: Install dependencies
+        run: npm ci
+
+      # -----------------------------------------------------------------------
+      # 4. Run tests with coverage across all workspaces
+      # -----------------------------------------------------------------------
+      - name: Run tests with coverage
+        run: npm run test:coverage
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/fuelripple_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+
+      # -----------------------------------------------------------------------
+      # 5. Upload coverage report as artifact
+      # -----------------------------------------------------------------------
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Job: setup
+  # Resolves environment, ACR host, resource group, and image tag.
+  # ---------------------------------------------------------------------------
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      environment: ${{ steps.resolve.outputs.environment }}
+      acr_host: ${{ steps.resolve.outputs.acr_host }}
+      resource_group: ${{ steps.resolve.outputs.resource_group }}
+      image_tag: ${{ steps.resolve.outputs.image_tag }}
+
+    steps:
+      # -----------------------------------------------------------------------
+      # 1. Resolve environment, ACR, and image tag
+      #    Manual run: use input or fall back to short SHA
+      #    Automatic run: branch name drives environment
+      # -----------------------------------------------------------------------
+      - name: Resolve environment and image tag
+        id: resolve
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             ENV="${{ github.event.inputs.environment }}"
@@ -51,75 +169,136 @@ jobs:
           fi
 
           if [[ "$ENV" == "prod" ]]; then
-            echo "acr_name=${{ env.ACR_NAME_PROD }}" >> $GITHUB_OUTPUT
-            echo "resource_group=${{ env.RESOURCE_GROUP_PROD }}" >> $GITHUB_OUTPUT
+            ACR_HOST="${{ env.ACR_NAME_PROD }}.azurecr.io"
+            RG="${{ env.RESOURCE_GROUP_PROD }}"
           else
-            echo "acr_name=${{ env.ACR_NAME_DEV }}" >> $GITHUB_OUTPUT
-            echo "resource_group=${{ env.RESOURCE_GROUP_DEV }}" >> $GITHUB_OUTPUT
+            ACR_HOST="${{ env.ACR_NAME_DEV }}.azurecr.io"
+            RG="${{ env.RESOURCE_GROUP_DEV }}"
           fi
 
-          echo "environment=$ENV" >> $GITHUB_OUTPUT
-          echo "image_tag=sha-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          INPUT_TAG="${{ github.event.inputs.image_tag }}"
+          SHORT_SHA="${GITHUB_SHA::8}"
+          TAG="${INPUT_TAG:-$SHORT_SHA}"
 
-  # ─── Build & Push Docker images ───
-  build:
-    runs-on: ubuntu-latest
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "acr_host=$ACR_HOST" >> $GITHUB_OUTPUT
+          echo "resource_group=$RG" >> $GITHUB_OUTPUT
+          echo "image_tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Resolved: env=$ENV  tag=$TAG  acr=$ACR_HOST"
+
+  # ---------------------------------------------------------------------------
+  # Job: build-and-push
+  # Builds API and Web Docker images in parallel and pushes to ACR.
+  # Uses Docker Buildx with GitHub Actions layer cache for fast rebuilds.
+  # ---------------------------------------------------------------------------
+  build-and-push:
+    name: Build & Push (${{ matrix.app }})
     needs: setup
-    environment: ${{ needs.setup.outputs.environment }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         app: [api, web]
+
     steps:
-      - name: Checkout code
+      # -----------------------------------------------------------------------
+      # 1. Checkout
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Log in to Azure
-        uses: azure/login@v2
+      # -----------------------------------------------------------------------
+      # 2. Log in to ACR
+      # -----------------------------------------------------------------------
+      - name: Log in to Azure Container Registry
+        uses: docker/login-action@v3
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Log in to ACR
-        run: az acr login --name ${{ needs.setup.outputs.acr_name }}
+      # -----------------------------------------------------------------------
+      # 3. Set up Docker Buildx (multi-platform / cache support)
+      # -----------------------------------------------------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
+      # -----------------------------------------------------------------------
+      # 4. Build and push
+      #    Tags: :<sha>  and optionally :latest
+      #    Cache scoped per app to avoid cache collisions between api and web.
+      # -----------------------------------------------------------------------
       - name: Build and push ${{ matrix.app }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.ACR_LOGIN_SERVER }}/fuelripple-${{ matrix.app }}:${{ needs.setup.outputs.image_tag }}
+            ${{ (github.event_name == 'push' || github.event.inputs.push_latest == 'true') && format('{0}/fuelripple-{1}:latest', secrets.ACR_LOGIN_SERVER, matrix.app) || '' }}
+          cache-from: type=gha,scope=fuelripple-${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=fuelripple-${{ matrix.app }}
+
+      # -----------------------------------------------------------------------
+      # 5. Summary
+      # -----------------------------------------------------------------------
+      - name: Output image reference
         run: |
-          ACR=${{ needs.setup.outputs.acr_name }}.azurecr.io
-          TAG=${{ needs.setup.outputs.image_tag }}
+          echo "### ${{ matrix.app }} image pushed :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Registry** | \`${{ secrets.ACR_LOGIN_SERVER }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image** | \`fuelripple-${{ matrix.app }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Tag** | \`${{ needs.setup.outputs.image_tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **SHA** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
 
-          docker build \
-            -f apps/${{ matrix.app }}/Dockerfile \
-            -t $ACR/fuelripple-${{ matrix.app }}:$TAG \
-            -t $ACR/fuelripple-${{ matrix.app }}:latest \
-            .
-
-          docker push $ACR/fuelripple-${{ matrix.app }}:$TAG
-          docker push $ACR/fuelripple-${{ matrix.app }}:latest
-
-  # ─── Deploy Infrastructure (Bicep) ───
+  # ---------------------------------------------------------------------------
+  # Job: infra
+  # Deploys or updates Azure infrastructure via Bicep.
+  # ---------------------------------------------------------------------------
   infra:
+    name: Deploy Infrastructure
+    needs: [setup, build-and-push]
     runs-on: ubuntu-latest
-    needs: [setup, build]
-    environment: ${{ needs.setup.outputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
-      - name: Checkout code
+      # -----------------------------------------------------------------------
+      # 1. Checkout
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Log in to Azure
+      # -----------------------------------------------------------------------
+      # 2. Azure login via OIDC
+      # -----------------------------------------------------------------------
+      - name: Azure login
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_19B9CF6E5E8F4F62B5FD4D18E54C5600 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_2C00FBAC276C4F1ABC367E552374A0CA }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_43645EA172E34549B2664D9DDDEFE163 }}
 
-      - name: Create resource group if not exists
+      # -----------------------------------------------------------------------
+      # 3. Ensure resource group exists
+      # -----------------------------------------------------------------------
+      - name: Ensure resource group exists
         run: |
           az group create \
             --name ${{ needs.setup.outputs.resource_group }} \
-            --location eastus2 \
-            --tags project=fuelripple environment=${{ needs.setup.outputs.environment }}
+            --location westus3 \
+            --tags project=fuelripple environment=${{ needs.setup.outputs.environment }} \
+            --output none
 
+      # -----------------------------------------------------------------------
+      # 4. Deploy Bicep template
+      # -----------------------------------------------------------------------
       - name: Deploy Bicep template
         run: |
           az deployment group create \
@@ -127,111 +306,152 @@ jobs:
             --template-file infra/main.bicep \
             --parameters infra/parameters/${{ needs.setup.outputs.environment }}.bicepparam \
             --parameters \
-              apiImageTag=${{ needs.setup.outputs.image_tag }} \
-              webImageTag=${{ needs.setup.outputs.image_tag }} \
+              apiImageTag="${{ needs.setup.outputs.image_tag }}" \
+              webImageTag="${{ needs.setup.outputs.image_tag }}" \
               dbPassword="${{ secrets.DB_PASSWORD }}" \
               eiaApiKey="${{ secrets.EIA_API_KEY }}" \
-              fredApiKey="${{ secrets.FRED_API_KEY }}"
+              fredApiKey="${{ secrets.FRED_API_KEY }}" \
+            --output none
 
-  # ─── Deploy containers to App Service ───
+          echo "### Infrastructure deployed :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: \`${{ needs.setup.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Resource Group**: \`${{ needs.setup.outputs.resource_group }}\`" >> $GITHUB_STEP_SUMMARY
+
+  # ---------------------------------------------------------------------------
+  # Job: deploy
+  # Updates App Service containers to the new image tag and health-checks each.
+  # ---------------------------------------------------------------------------
   deploy:
+    name: Deploy App (${{ matrix.app }})
+    needs: [setup, infra]
     runs-on: ubuntu-latest
-    needs: [setup, build, infra]
-    environment: ${{ needs.setup.outputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       matrix:
         include:
           - app: api
-            app_name_prefix: app-api
+            health_path: /health
+            retries: 10
+            wait: 15
           - app: web
-            app_name_prefix: app-web
+            health_path: /
+            retries: 6
+            wait: 10
+
     steps:
-      - name: Log in to Azure
+      # -----------------------------------------------------------------------
+      # 1. Azure login via OIDC
+      # -----------------------------------------------------------------------
+      - name: Azure login
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_19B9CF6E5E8F4F62B5FD4D18E54C5600 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_2C00FBAC276C4F1ABC367E552374A0CA }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_43645EA172E34549B2664D9DDDEFE163 }}
 
-      - name: Deploy ${{ matrix.app }} container
+      # -----------------------------------------------------------------------
+      # 2. Force new App Service revision with the versioned SHA tag
+      # -----------------------------------------------------------------------
+      - name: Update ${{ matrix.app }} container image
         run: |
-          ACR=${{ needs.setup.outputs.acr_name }}.azurecr.io
-          TAG=${{ needs.setup.outputs.image_tag }}
           ENV=${{ needs.setup.outputs.environment }}
-          APP_NAME="${{ matrix.app_name_prefix }}-fuelripple-${ENV}"
-          RG=${{ needs.setup.outputs.resource_group }}
+          APP_NAME="app-${{ matrix.app }}-fuelripple-${ENV}"
+          IMAGE="${{ secrets.ACR_LOGIN_SERVER }}/fuelripple-${{ matrix.app }}:${{ needs.setup.outputs.image_tag }}"
 
           az webapp config container set \
             --name $APP_NAME \
-            --resource-group $RG \
-            --container-image-name $ACR/fuelripple-${{ matrix.app }}:$TAG \
-            --container-registry-url https://$ACR
+            --resource-group ${{ needs.setup.outputs.resource_group }} \
+            --container-image-name $IMAGE \
+            --output none
 
           az webapp restart \
             --name $APP_NAME \
-            --resource-group $RG
+            --resource-group ${{ needs.setup.outputs.resource_group }} \
+            --output none
 
-  # ─── Run database migrations ───
+          echo "New revision: fuelripple-${{ matrix.app }}:${{ needs.setup.outputs.image_tag }}"
+
+      # -----------------------------------------------------------------------
+      # 3. Health check with retry loop
+      # -----------------------------------------------------------------------
+      - name: Health check
+        run: |
+          ENV=${{ needs.setup.outputs.environment }}
+          APP_NAME="app-${{ matrix.app }}-fuelripple-${ENV}"
+          FQDN=$(az webapp show \
+            --name $APP_NAME \
+            --resource-group ${{ needs.setup.outputs.resource_group }} \
+            --query "defaultHostName" \
+            --output tsv)
+
+          URL="https://${FQDN}${{ matrix.health_path }}"
+          echo "Waiting for ${{ matrix.app }} to start..."
+          sleep 20
+
+          for i in $(seq 1 ${{ matrix.retries }}); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "${{ matrix.app }} health check passed!"
+              echo "### ${{ matrix.app }} deployed :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+              echo "- **URL**: $URL" >> $GITHUB_STEP_SUMMARY
+              echo "- **Image**: \`fuelripple-${{ matrix.app }}:${{ needs.setup.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+              exit 0
+            fi
+            echo "Attempt $i/${{ matrix.retries }} — HTTP $STATUS. Retrying in ${{ matrix.wait }}s..."
+            sleep ${{ matrix.wait }}
+          done
+
+          echo "WARNING: ${{ matrix.app }} health check did not return 200."
+          exit 1
+
+  # ---------------------------------------------------------------------------
+  # Job: migrate
+  # Runs Knex database migrations after the API container is deployed.
+  # ---------------------------------------------------------------------------
   migrate:
-    runs-on: ubuntu-latest
+    name: Database Migrations
     needs: [setup, deploy]
-    environment: ${{ needs.setup.outputs.environment }}
-    if: contains(fromJSON('["api"]'), 'api')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
     steps:
-      - name: Checkout code
+      # -----------------------------------------------------------------------
+      # 1. Checkout
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # -----------------------------------------------------------------------
+      # 2. Set up Node.js with npm cache
+      # -----------------------------------------------------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: '20'
+          cache: 'npm'
 
+      # -----------------------------------------------------------------------
+      # 3. Install dependencies
+      # -----------------------------------------------------------------------
       - name: Install dependencies
         run: npm ci
 
-      - name: Run migrations
+      # -----------------------------------------------------------------------
+      # 4. Run migrations
+      # -----------------------------------------------------------------------
+      - name: Run database migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run db:migrate
 
-  # ─── Smoke test ───
-  smoke-test:
-    runs-on: ubuntu-latest
-    needs: [setup, deploy, migrate]
-    steps:
-      - name: Health check API
+      # -----------------------------------------------------------------------
+      # 5. Summary
+      # -----------------------------------------------------------------------
+      - name: Migration summary
         run: |
-          ENV=${{ needs.setup.outputs.environment }}
-          URL="https://app-api-fuelripple-${ENV}.azurewebsites.net/health"
-          echo "Checking $URL"
-          
-          for i in {1..10}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || true)
-            if [[ "$STATUS" == "200" ]]; then
-              echo "API is healthy (attempt $i)"
-              exit 0
-            fi
-            echo "Attempt $i: status $STATUS, retrying in 15s..."
-            sleep 15
-          done
-          echo "API health check failed after 10 attempts"
-          exit 1
+          echo "### Migrations applied :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: \`${{ needs.setup.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
 
-      - name: Health check Web
-        run: |
-          ENV=${{ needs.setup.outputs.environment }}
-          URL="https://app-web-fuelripple-${ENV}.azurewebsites.net/"
-          echo "Checking $URL"
-          
-          for i in {1..5}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || true)
-            if [[ "$STATUS" == "200" ]]; then
-              echo "Web is healthy (attempt $i)"
-              exit 0
-            fi
-            echo "Attempt $i: status $STATUS, retrying in 10s..."
-            sleep 10
-          done
-          echo "Web health check failed"
-          exit 1

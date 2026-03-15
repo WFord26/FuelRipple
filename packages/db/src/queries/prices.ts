@@ -25,6 +25,20 @@ export async function insertPrices(prices: EnergyPrice[]): Promise<void> {
 }
 
 /**
+ * Refresh the pre-computed aggregate materialized views after new price data
+ * is loaded.  Called by the BullMQ workers after each successful insertPrices.
+ * Uses a plain (non-concurrent) refresh — safe because each view is tiny relative
+ * to energy_prices and refresh runs at most once per ingestion job.
+ */
+export async function refreshMaterializedViews(): Promise<void> {
+  const knex = getKnex();
+  for (const view of ['daily_prices', 'weekly_prices', 'monthly_prices']) {
+    await knex.raw(`REFRESH MATERIALIZED VIEW ${view};`);
+  }
+  console.log('✅ Materialized views refreshed (daily, weekly, monthly)');
+}
+
+/**
  * Get current prices for all regions
  */
 export async function getCurrentPrices(metric: string): Promise<any[]> {

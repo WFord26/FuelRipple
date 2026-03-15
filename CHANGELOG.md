@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Release SOP** (`docs/RELEASE.md`) — standard operating procedure covering the full
+  lifecycle: changelog update → beta bump → beta deployment → PR → review → merge → prod
+- **Version bump script** (`scripts/bump-version.js`) — Node.js CLI for managing semver
+  across `apps/web`, `apps/api`, and the root `package.json`
+  - Bump types: `patch`, `minor`, `major`, `pre-patch`, `pre-minor`, `pre-major`, `release`
+  - Automatically stages changed files and commits after each bump
+  - Pre-release examples: `1.0.0 → 1.0.1-beta.0`; subsequent beta run → `1.0.1-beta.1`
+  - Release promotion: `1.0.1-beta.0 → 1.0.1`
+- **npm version scripts** in root `package.json`:
+  `version:beta:patch`, `version:beta:minor`, `version:beta:major`,
+  `version:release`, `version:release:api`, `version:release:web`
 
 ### Changed
 

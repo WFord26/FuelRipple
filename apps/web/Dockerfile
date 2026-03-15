@@ -22,6 +22,10 @@ RUN npm ci
 COPY packages/shared/ packages/shared/
 COPY apps/web/ apps/web/
 
+# Accept VITE_API_URL at build time so Vite bakes it into the JS bundle
+ARG VITE_API_URL=https://api.fuelripple.com/api/v1
+ENV VITE_API_URL=${VITE_API_URL}
+
 # Build shared package + web app via Turborepo
 RUN npx turbo run build --filter=@fuelripple/web...
 

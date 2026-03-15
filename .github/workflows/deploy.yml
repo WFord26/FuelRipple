@@ -235,6 +235,8 @@ jobs:
           context: .
           file: ./apps/${{ matrix.app }}/Dockerfile
           push: true
+          build-args: |
+            VITE_API_URL=https://api.fuelripple.com/api/v1
           tags: |
             ${{ secrets.ACR_LOGIN_SERVER }}/fuelripple-${{ matrix.app }}:${{ needs.setup.outputs.image_tag }}
             ${{ (github.event_name == 'push' || github.event.inputs.push_latest == 'true') && format('{0}/fuelripple-{1}:latest', secrets.ACR_LOGIN_SERVER, matrix.app) || '' }}

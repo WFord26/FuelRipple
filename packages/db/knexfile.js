@@ -46,16 +46,27 @@ const dotenv = __importStar(require("dotenv"));
 const path_1 = __importDefault(require("path"));
 // Load environment variables
 dotenv.config({ path: path_1.default.resolve(__dirname, '../../.env') });
+function buildConnection(url) {
+    const cleanUrl = url.split('?')[0];
+    const isRemote = !cleanUrl.includes('localhost') && !cleanUrl.includes('127.0.0.1');
+    return {
+        connectionString: cleanUrl,
+        ssl: isRemote ? { rejectUnauthorized: false } : false,
+    };
+}
+const localFallback = {
+    host: 'localhost',
+    port: 5432,
+    database: 'gastracker',
+    user: 'dev_user',
+    password: 'dev_password',
+};
 exports.config = {
     development: {
         client: 'postgresql',
-        connection: process.env.DATABASE_URL || {
-            host: 'localhost',
-            port: 5432,
-            database: 'gastracker',
-            user: 'dev_user',
-            password: 'dev_password',
-        },
+        connection: process.env.DATABASE_URL
+            ? buildConnection(process.env.DATABASE_URL)
+            : localFallback,
         pool: {
             min: 2,
             max: 10,
@@ -72,7 +83,9 @@ exports.config = {
     },
     production: {
         client: 'postgresql',
-        connection: process.env.DATABASE_URL,
+        connection: process.env.DATABASE_URL
+            ? buildConnection(process.env.DATABASE_URL)
+            : undefined,
         pool: {
             min: 2,
             max: 20,
@@ -81,9 +94,6 @@ exports.config = {
             tableName: 'knex_migrations',
             directory: './migrations',
             extension: 'ts',
-        },
-        ssl: {
-            rejectUnauthorized: false,
         },
     },
 };

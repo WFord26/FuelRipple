@@ -69,10 +69,12 @@ initializeCache();
 // Initialize job queue
 initializeJobQueue();
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 FuelRipple API server running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// Start server (skip in test mode — supertest binds its own ephemeral port)
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`🚀 FuelRipple API server running on port ${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+}
 
 export default app;

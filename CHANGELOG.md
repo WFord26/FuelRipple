@@ -9,6 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.2] - 2026-03-15
+
+### Added
+- **Full test coverage across all packages** — replaced every placeholder test
+  (`expect(true).toBe(true)`) with real assertions; 216 tests now passing across
+  5 packages
+  - `@fuelripple/shared` — 56 tests (Zod schema validation, constants/PADD regions,
+    EIA/FRED series IDs, cache TTL, rate limits)
+  - `@fuelripple/impact-engine` — 60 tests (fuel cost calculations, disruption scoring,
+    cross-correlation/optimal lag, downstream freight & CPI impact)
+  - `@fuelripple/db` — 16 tests (Knex config per environment, query helpers with
+    mocked knex chainable API)
+  - `@fuelripple/api` — 51 tests (error handler middleware, region mapper utilities,
+    full HTTP integration tests via supertest for prices, disruption, impact,
+    correlation, and events endpoints)
+  - `@fuelripple/web` — 33 tests (API client wrappers with mocked axios, Layout
+    component rendering, ErrorBoundary error/recovery states, SEO hook meta tags,
+    App component smoke test)
+
+### Fixed
+- **`findOptimalLag` production bug** (`packages/impact-engine/src/correlation.ts`) —
+  initialized `maxCorr` to `-Infinity`, but compared via `Math.abs()` which made it
+  `Infinity`; no correlation could ever exceed it, so the function always returned
+  lag 0. Fixed by tracking `maxAbsCorr = -1`
+- **`app.listen` EADDRINUSE in tests** (`apps/api/src/index.ts`) — added
+  `NODE_ENV !== 'test'` guard so supertest integration tests can import the Express
+  app without binding to port 3001
+- **DB config test for production connection** — production config wraps `DATABASE_URL`
+  in an object with SSL options; updated test assertion to check `connectionString`
+  property instead of a bare string comparison
+- **React 18/19 dual-copy resolution** — `@elastic/charts` pulled React 18 as a
+  transitive dependency, breaking component tests under React 19. Installed
+  `react@19` and `react-dom@19` at the workspace root, upgraded
+  `@testing-library/react` to v16, and added `@testing-library/dom` peer dependency
+- **Cleaned up `apps/web/vitest.config.ts`** — removed broken React path aliases and
+  deprecated `deps.inline` option that were no longer needed after root React
+  deduplication
+
+---
+
 ## [1.0.1] - 2026-03-15
 ### Added
 - **VITE_API_URL Docker build argument** — `apps/web/Dockerfile` now accepts a

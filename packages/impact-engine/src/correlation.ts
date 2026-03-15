@@ -57,12 +57,13 @@ export function calculateCrossCorrelation(
 export function findOptimalLag(crossCorrelation: { lag: number; correlation: number }[]): number {
   if (crossCorrelation.length === 0) return 0;
   
-  let maxCorr = -Infinity;
+  let maxAbsCorr = -1;
   let optimalLag = 0;
   
   for (const { lag, correlation } of crossCorrelation) {
-    if (Math.abs(correlation) > Math.abs(maxCorr)) {
-      maxCorr = correlation;
+    const absCorr = Math.abs(correlation);
+    if (absCorr > maxAbsCorr) {
+      maxAbsCorr = absCorr;
       optimalLag = lag;
     }
   }

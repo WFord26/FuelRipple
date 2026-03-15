@@ -1,119 +1,35 @@
 # FuelRipple — US Gas Price Tracker & Consumer Disruption Index
 
+[![Tests](https://github.com/WFord26/FuelRipple/actions/workflows/tests.yml/badge.svg)](https://github.com/WFord26/FuelRipple/actions/workflows/tests.yml)
+[![Build & Deploy](https://github.com/WFord26/FuelRipple/actions/workflows/deploy.yml/badge.svg)](https://github.com/WFord26/FuelRipple/actions/workflows/deploy.yml)
+![Version](https://img.shields.io/badge/version-1.0.1-blue)
+
 **Live site:** [www.fuelripple.com](https://www.fuelripple.com)
 
-A web application that tracks US gasoline prices and quantifies the real-world impact of price volatility on American consumers.
+FuelRipple tracks US gasoline prices and translates price volatility into real household-level cost impacts through a **Consumer Disruption Index**. It pulls live data from the EIA and FRED, processes it through a custom impact engine, and surfaces it as an interactive dashboard.
 
-## Architecture
+## What It Does
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the complete technical architecture.
+- **Tracks weekly US gas prices** by region using EIA data
+- **Monitors crude oil, diesel, refinery utilization, and fuel stocks** in near real-time
+- **Computes a Consumer Disruption Index** — a score that converts price swings into estimated annual household cost changes
+- **Correlates fuel prices** with macroeconomic indicators (CPI, unemployment, GDP) and upstream drivers (WTI crude, refinery utilization)
+- **Maps geopolitical events** to price movements on an interactive timeline
 
-## Technology Stack
+## Data Sources
 
-- **Frontend:** React 19, Vite, TailwindCSS, TradingView Lightweight Charts
-- **Backend:** Node.js, Express, TypeScript
-- **Database:** PostgreSQL 16 + TimescaleDB
-- **Cache:** Redis
-- **Job Queue:** BullMQ
+| Source | Data |
+|---|---|
+| [EIA Open Data](https://www.eia.gov/opendata/) | US gasoline prices, crude oil, diesel, refinery utilization, fuel stocks |
+| [FRED (St. Louis Fed)](https://fred.stlouisfed.org/) | CPI, unemployment, GDP, WTI crude spot price |
 
-## Project Structure
+All data is ingested automatically each week and stored in a TimescaleDB hypertable for fast time-series queries.
 
-```
-fuelripple/
-├── apps/
-│   ├── web/          # React frontend
-│   └── api/          # Express.js backend
-├── packages/
-│   ├── shared/       # Shared types and schemas
-│   ├── impact-engine/ # Consumer impact calculations
-│   └── db/           # Database migrations and queries
-└── docs/             # Documentation
-```
+## Contributing
 
-## Prerequisites
-
-- Node.js >= 20.0.0
-- Docker and Docker Compose (for local development)
-- API Keys:
-  - [EIA API Key](https://www.eia.gov/opendata/register.php) (free)
-  - [FRED API Key](https://fred.stlouisfed.org/docs/api/api_key.html) (free)
-
-## Quick Start
-
-```bash
-# 1. Install dependencies
-npm install
-
-# 2. Configure environment (add your API keys)
-cp .env.example .env
-
-# 3. Start Docker services (PostgreSQL + Redis)
-docker-compose up -d
-
-# 4. Run database migrations
-npm run db:migrate
-
-# 5. Seed sample data
-npm run db:seed
-
-# 6. Start development servers
-npm run dev
-```
-
-Visit http://localhost:5173 to see the dashboard.
-
-📖 **Detailed guides:**
-- [Setup Guide](docs/SETUP.md) — Complete setup instructions with troubleshooting
-- [Quick Reference](docs/QUICK_START.md) — Architecture overview and common tasks
-- [Architecture Doc](docs/ARCHITECTURE.md) — Full technical specification
-- [Changelog](CHANGELOG.md) — Version history and release notes
-
-## Available Scripts
-
-- `npm run dev` - Start all services in development mode
-- `npm run build` - Build all packages and apps for production
-- `npm run lint` - Run linting across all workspaces
-- `npm run test` - Run tests across all workspaces
-- `npm run db:migrate` - Run database migrations
-- `npm run db:seed` - Seed database with initial data
-
-## Development Roadmap
-
-- [x] **Phase 1: Foundation** ✅ Complete
-  - [x] Monorepo structure with Turborepo
-  - [x] PostgreSQL + TimescaleDB schema with hypertables
-  - [x] Express.js API with caching (Redis + LRU)
-  - [x] BullMQ data ingestion pipeline (EIA + FRED)
-  - [x] Consumer impact engine (fuel cost, disruption score, correlation)
-  - [x] React frontend with TailwindCSS and routing
-  - [x] Basic dashboard with price overview
-
-- [ ] **Phase 2: Core Dashboard** (Next)
-  - [ ] TradingView Lightweight Charts integration
-  - [ ] Interactive historical price visualization
-  - [ ] Regional comparison charts
-  - [ ] Geopolitical event markers
-
-- [ ] **Phase 3: Impact Engine**
-  - [ ] Interactive fuel cost calculator with React Hook Form
-  - [ ] Disruption score visualization
-  - [ ] Volatility charting
-
-- [ ] **Phase 4: Correlation**
-  - [ ] Crude oil correlation charts
-  - [ ] Lag analysis visualization
-  - [ ] Rockets-and-feathers asymmetry display
-
-- [ ] **Phase 5: Downstream**
-  - [ ] Diesel-freight-CPI Sankey diagram
-  - [ ] BLS data integration
-  - [ ] Food price impact calculator
-
-- [ ] **Phase 6: Polish**
-  - [ ] US regional heatmap
-  - [ ] Mobile responsive design
-  - [ ] Performance optimization
-  - [ ] Error handling and monitoring
+See [DEVELOPMENT.md](DEVELOPMENT.md) for local setup, scripts, and the CI/CD pipeline.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## License
 

@@ -477,12 +477,14 @@ export default function Dashboard() {
         <div className="bg-slate-800 rounded-lg p-5 border border-slate-700">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-lg">📦</span>
-            <span className="text-sm font-medium text-slate-300">Gasoline Inventory</span>
+            <span className="text-sm font-medium text-slate-300">{fuelType === 'diesel' ? 'Diesel Inventory' : 'Gasoline Inventory'}</span>
           </div>
           {inventories && inventories.length > 0 ? (() => {
             const latest = inventories[0];
-            const daysSupply = latest.gasoline_days_supply;
-            const zScore = latest.inventory_z_score;
+            const isDiesel = fuelType === 'diesel';
+            const daysSupply = isDiesel ? latest.distillate_days_supply : latest.gasoline_days_supply;
+            const zScore = isDiesel ? latest.distillate_z_score : latest.inventory_z_score;
+            const stocks = isDiesel ? latest.distillate_stocks : latest.gasoline_stocks;
             const isLow = zScore != null && zScore < -1;
             return (
               <>
@@ -502,10 +504,10 @@ export default function Dashboard() {
                 )}
                 <div className="mt-3 pt-3 border-t border-slate-700 text-xs text-slate-500">
                   <div className="flex justify-between">
-                    <span>Gas stocks</span>
+                    <span>{isDiesel ? 'Distillate stocks' : 'Gas stocks'}</span>
                     <span className="text-slate-400">
-                      {latest.gasoline_stocks != null
-                        ? `${(Number(latest.gasoline_stocks) / 1000).toFixed(0)}M bbl`
+                      {stocks != null
+                        ? `${(Number(stocks) / 1000).toFixed(0)}M bbl`
                         : '—'}
                     </span>
                   </div>

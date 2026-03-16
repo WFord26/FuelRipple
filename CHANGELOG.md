@@ -54,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Materialized view refresh in backfill** — backfill script now calls
   `refreshMaterializedViews()` after all sources complete, so historical data is
   immediately visible to the API (previously views were stale after backfill).
+- **Diesel inventory on dashboard** — inventory days-of-supply card now switches between
+  gasoline and distillate (diesel) metrics when the fuel type toggle is changed. Added
+  `distillate_days_supply` and `distillate_z_score` to the `getInventoryData()` query
+  in `@fuelripple/db`, using `distillate_production` as the demand proxy for days of
+  supply and a 52-week rolling window for z-score.
 
 ### Fixed
 - **CI/CD deploy workflow** — updated health-check URLs, removed Bicep infra job,

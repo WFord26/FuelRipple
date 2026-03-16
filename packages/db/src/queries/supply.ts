@@ -160,12 +160,19 @@ export async function getInventoryData(region: string = 'US', weeks: number = 10
         gasoline_stocks,
         distillate_stocks,
         gasoline_production,
-        -- Rough days-of-supply: stocks / (daily avg production as demand proxy)
+        distillate_production,
+        -- Gasoline days-of-supply: stocks / (daily avg production as demand proxy)
         CASE
           WHEN gasoline_production > 0
           THEN (gasoline_stocks / (gasoline_production / 7.0))
           ELSE NULL
         END AS gasoline_days_supply,
+        -- Distillate days-of-supply
+        CASE
+          WHEN distillate_production > 0
+          THEN (distillate_stocks / (distillate_production / 7.0))
+          ELSE NULL
+        END AS distillate_days_supply,
         AVG(gasoline_stocks) OVER (
           PARTITION BY region
           ORDER BY time
@@ -175,7 +182,17 @@ export async function getInventoryData(region: string = 'US', weeks: number = 10
           PARTITION BY region
           ORDER BY time
           ROWS BETWEEN 51 PRECEDING AND CURRENT ROW
-        ) AS gasoline_stocks_52w_stddev
+        ) AS gasoline_stocks_52w_stddev,
+        AVG(distillate_stocks) OVER (
+          PARTITION BY region
+          ORDER BY time
+          ROWS BETWEEN 51 PRECEDING AND CURRENT ROW
+        ) AS distillate_stocks_52w_avg,
+        STDDEV(distillate_stocks) OVER (
+          PARTITION BY region
+          ORDER BY time
+          ROWS BETWEEN 51 PRECEDING AND CURRENT ROW
+        ) AS distillate_stocks_52w_stddev
       FROM refinery_operations
       WHERE region = ?
         AND gasoline_stocks IS NOT NULL
@@ -186,13 +203,21 @@ export async function getInventoryData(region: string = 'US', weeks: number = 10
       gasoline_stocks,
       distillate_stocks,
       gasoline_days_supply,
+      distillate_days_supply,
       gasoline_stocks_52w_avg,
       gasoline_stocks_52w_stddev,
       CASE
         WHEN gasoline_stocks_52w_stddev > 0
         THEN (gasoline_stocks - gasoline_stocks_52w_avg) / gasoline_stocks_52w_stddev
         ELSE 0
-      END AS inventory_z_score
+      END AS inventory_z_score,
+      distillate_stocks_52w_avg,
+      distillate_stocks_52w_stddev,
+      CASE
+        WHEN distillate_stocks_52w_stddev > 0
+        THEN (distillate_stocks - distillate_stocks_52w_avg) / distillate_stocks_52w_stddev
+        ELSE 0
+      END AS distillate_z_score
     FROM stock_data
     WHERE time >= NOW() - (? * INTERVAL '1 week')
     ORDER BY time DESC

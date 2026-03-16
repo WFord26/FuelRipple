@@ -17,6 +17,22 @@ export const CONSTANTS = {
   
   // Diesel baseline for freight surcharge calculation (DOE reference)
   DIESEL_BASELINE: 1.25,
+
+  // Average national dry-van freight rate (DAT/FreightWaves, 2024-25 range)
+  BASE_FREIGHT_RATE_PER_MILE: 2.70,
+
+  // Diesel cost-per-mile pass-through: $1/gal → 15-17¢/mile (ATRI midpoint)
+  DIESEL_COST_PER_MILE_FACTOR: 0.16,
+
+  // Freight → CPI multipliers (Architecture §4.5.2, BLS PPI):
+  //   5-10% freight rate ↑ → 0.5-2% consumer goods ↑
+  //   Low:  5% → 0.5% = 0.10 ratio
+  //   High: 10% → 2.0% = 0.20 ratio
+  CPI_FREIGHT_ELASTICITY_MIN: 0.10,
+  CPI_FREIGHT_ELASTICITY_MAX: 0.20,
+
+  // USDA ERS: transportation is ~9% of retail food cost
+  FOOD_TRANSPORT_SHARE: 0.09,
   
   // Crude oil price impact on gas prices
   CRUDE_TO_GAS_RATIO: 0.025, // $10/barrel ≈ $0.25/gallon

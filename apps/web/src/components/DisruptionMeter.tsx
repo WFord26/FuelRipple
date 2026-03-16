@@ -4,6 +4,7 @@ import '@elastic/charts/dist/theme_dark.css';
 interface DisruptionMeterProps {
   score: number;
   classification: 'normal' | 'elevated' | 'high' | 'crisis';
+  direction?: 'rising' | 'falling' | 'stable';
 }
 
 const colorBands = [
@@ -18,8 +19,12 @@ const gaugeTheme = {
   background: { color: '#1e293b' },
 };
 
-export default function DisruptionMeter({ score, classification }: DisruptionMeterProps) {
+export default function DisruptionMeter({ score, classification, direction }: DisruptionMeterProps) {
   const clampedScore = Math.min(Math.max(score, 0), 5);
+
+  const dirArrow = direction === 'rising' ? '▲' : direction === 'falling' ? '▼' : '●';
+  const dirColor = direction === 'rising' ? 'text-red-400' : direction === 'falling' ? 'text-green-400' : 'text-slate-400';
+  const dirLabel = direction === 'rising' ? 'Prices rising' : direction === 'falling' ? 'Prices falling' : 'Stable';
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -52,6 +57,14 @@ export default function DisruptionMeter({ score, classification }: DisruptionMet
       }`}>
         {classification.toUpperCase()} &mdash; {score.toFixed(2)}
       </div>
+
+      {/* Direction indicator */}
+      {direction && (
+        <div className={`flex items-center gap-1.5 text-sm font-medium ${dirColor}`}>
+          <span className="text-base">{dirArrow}</span>
+          <span>{dirLabel}</span>
+        </div>
+      )}
 
       {/* Legend */}
       <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">

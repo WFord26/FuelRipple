@@ -10,7 +10,6 @@ const navigation = [
   { name: 'Correlation',  path: '/correlation' },
   { name: 'Downstream',   path: '/downstream' },
   { name: 'State Prices', path: '/state-prices' },
-  { name: 'Data Status',  path: '/data-status' },
 ];
 
 export default function Layout() {
@@ -103,6 +102,14 @@ export default function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <p className="text-center text-slate-400 text-sm">
             Data sources: EIA, FRED | Built with React + Node + TimescaleDB |{' '}
+            <Link to="/methodology" className="hover:text-slate-200 underline">
+              Methodology
+            </Link>
+            {' | '}
+            <Link to="/data-status" className="hover:text-slate-200 underline">
+              Data Status
+            </Link>
+            {' | '}
             <a
               href="https://github.com/WFord26/FuelRipple"
               target="_blank"

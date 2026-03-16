@@ -108,7 +108,12 @@ export async function getPriceStats(
 }
 
 /**
- * Calculate week-over-week price changes
+ * Calculate week-over-week price changes.
+ *
+ * Uses a source-preference strategy to avoid mixing EIA weekly data with
+ * AAA daily scrapes inside the same time bucket (which produces artificial
+ * jumps). For each week we take the EIA value if available, otherwise AAA,
+ * otherwise any source.
  */
 export async function getWeeklyChanges(
   metric: string,
@@ -116,23 +121,40 @@ export async function getWeeklyChanges(
   weeks: number = 52
 ): Promise<any[]> {
   const knex = getKnex();
-  
+
   return knex.raw(`
-    WITH weekly_data AS (
+    WITH ranked AS (
       SELECT
-        time_bucket('7 days', time) as week,
-        AVG(value) as avg_price
+        time_bucket('7 days', time)     AS week,
+        value,
+        source,
+        -- Prefer EIA > AAA > everything else within the same week
+        ROW_NUMBER() OVER (
+          PARTITION BY time_bucket('7 days', time)
+          ORDER BY
+            CASE source
+              WHEN 'eia'  THEN 1
+              WHEN 'aaa'  THEN 2
+              ELSE             3
+            END,
+            time DESC
+        ) AS rn
       FROM energy_prices
       WHERE metric = ? AND region = ?
-      GROUP BY week
-      ORDER BY week DESC
-      LIMIT ?
+    ),
+    weekly_data AS (
+      SELECT week, value AS avg_price
+      FROM   ranked
+      WHERE  rn = 1
+      ORDER  BY week DESC
+      LIMIT  ?
     )
     SELECT
       week,
       avg_price,
       LAG(avg_price) OVER (ORDER BY week) as prev_price,
-      (avg_price - LAG(avg_price) OVER (ORDER BY week)) / LAG(avg_price) OVER (ORDER BY week) as pct_change
+      (avg_price - LAG(avg_price) OVER (ORDER BY week))
+        / NULLIF(LAG(avg_price) OVER (ORDER BY week), 0) as pct_change
     FROM weekly_data
     ORDER BY week DESC
   `, [metric, region, weeks]).then(result => result.rows);

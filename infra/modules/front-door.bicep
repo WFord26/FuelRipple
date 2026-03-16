@@ -220,10 +220,10 @@ resource apiSubdomainRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2023-05-0
   dependsOn: [ apiOrigin, apiRoute ]
 }
 
-// fuelripple.com apex: /* → redirect to www.fuelripple.com via rule set
+// fuelripple.com apex: /* → 301 redirect to www.fuelripple.com via rule set
 resource apexRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2023-05-01' = {
   parent: endpoint
-  name: 'route-apex'
+  name: 'route-apex-redirect'
   properties: {
     originGroup: { id: webOriginGroup.id }
     customDomains: [
@@ -233,7 +233,7 @@ resource apexRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2023-05-01' = {
       { id: apexRedirectRuleSet.id }
     ]
     patternsToMatch: [ '/*' ]
-    supportedProtocols: [ 'Https' ]
+    supportedProtocols: [ 'Http', 'Https' ]
     httpsRedirect: 'Enabled'
     forwardingProtocol: 'HttpsOnly'
     linkToDefaultDomain: 'Disabled'

@@ -47,8 +47,10 @@ export type EconomicIndicator = z.infer<typeof EconomicIndicatorSchema>;
 
 // Disruption Score Schema
 export const DisruptionScoreSchema = z.object({
-  score: z.number(),
+  score: z.number(),                   // EMA-smoothed z-score
+  rawScore: z.number().optional(),     // unsmoothed single-week z-score
   classification: z.enum(['normal', 'elevated', 'high', 'crisis']),
+  direction: z.enum(['rising', 'falling', 'stable']).optional(),
   weeklyChange: z.number(),
   annualizedVolatility: z.number(),
   timestamp: z.date(),

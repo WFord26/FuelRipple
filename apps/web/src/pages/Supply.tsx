@@ -86,7 +86,15 @@ function ZBadge({ z }: { z: number }) {
 // ── Sub-components ─────────────────────────────────────────────────────────
 
 function UtilCard({ r }: { r: any }) {
-  const cls = r.classification ?? 'normal';
+  // Derive classification from z-scores if the server didn't provide one
+  const cls = r.classification
+    ?? ((): string => {
+      const z = r.stress_z_score ?? r.util_z ?? 0;
+      if (z <= -2.5) return 'critical';
+      if (z <= -1.5) return 'supply_stress';
+      if (z <= -0.5) return 'elevated_risk';
+      return 'normal';
+    })();
   const util = r.utilization_pct ?? 0;
   return (
     <div className={`bg-slate-800 rounded-lg p-4 border ${CLASS_COLOR[cls]}`}>
@@ -263,6 +271,22 @@ export default function Supply() {
           </div>
         </div>
       </div>
+
+      {/* ── Supply-Squeeze Alert ── */}
+      {health?.squeezeAlert?.active && (
+        <div className="bg-red-900/30 border border-red-700/60 rounded-xl p-5 flex items-start gap-4">
+          <span className="text-2xl shrink-0">⚠️</span>
+          <div>
+            <div className="text-sm font-bold text-red-300 mb-1">Supply Squeeze Alert</div>
+            <p className="text-sm text-slate-300">
+              Inventory <span className="font-semibold">and</span> refinery utilization are simultaneously below seasonal norms
+              in <span className="font-semibold text-white">
+                {health.squeezeAlert.regions.map((r: string) => PADD_NAMES[r] ?? r).join(', ')}
+              </span>. This dual-stress condition is the strongest historical predictor of near-term retail price increases (1–2 week lead time).
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── PADD Utilization Grid ── */}
       <div>

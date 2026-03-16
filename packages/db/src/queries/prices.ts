@@ -66,10 +66,14 @@ export async function refreshMaterializedViews(): Promise<void> {
 export async function getCurrentPrices(metric: string): Promise<any[]> {
   const knex = getKnex();
   
+  // Limit scan to recent 4 weeks to avoid locking every hypertable chunk.
+  // energy_prices is partitioned on `time`; an unbounded scan exhausts
+  // max_locks_per_transaction on Azure PG Flexible Server.
   return knex.raw(`
     SELECT DISTINCT ON (region) region, value, time
     FROM energy_prices
     WHERE metric = ?
+      AND time >= NOW() - INTERVAL '4 weeks'
     ORDER BY region, time DESC
   `, [metric]).then(result => result.rows);
 }

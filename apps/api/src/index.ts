@@ -54,6 +54,12 @@ const limiter = rateLimit({
   max: 100, // Limit each IP to 100 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
+  // Azure Front Door / App Service may forward ip:port — strip the port suffix
+  keyGenerator: (req) => {
+    const forwarded = req.ip || req.socket.remoteAddress || 'unknown';
+    // Strip port suffix if present (e.g. '147.243.248.73:48446' → '147.243.248.73')
+    return forwarded.replace(/:\d+$/, '');
+  },
 });
 app.use('/api/', limiter);
 

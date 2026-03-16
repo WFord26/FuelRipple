@@ -213,6 +213,7 @@ export async function getInventoryData(region: string = 'US', weeks: number = 10
       FROM refinery_operations
       WHERE region = ?
         AND gasoline_stocks IS NOT NULL
+        AND time >= NOW() - ((? + 52) * INTERVAL '1 week')
     )
     SELECT
       time,
@@ -238,7 +239,7 @@ export async function getInventoryData(region: string = 'US', weeks: number = 10
     FROM stock_data
     WHERE time >= NOW() - (? * INTERVAL '1 week')
     ORDER BY time DESC
-  `, [region, weeks]);
+  `, [region, weeks, weeks]);
 
   return result.rows;
 }

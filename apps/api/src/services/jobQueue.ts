@@ -10,6 +10,7 @@ import { EnergyPrice, EconomicIndicator } from '@fuelripple/shared';
 import { abbrToDuoarea } from '../utils/regionMapper';
 
 export let dataQueue: Queue | null = null;
+let bullmqConnOpts: Record<string, any> | null = null;
 
 /**
  * Initialize BullMQ job queue
@@ -21,12 +22,18 @@ export function initializeJobQueue(): void {
   }
 
   // Create queue with redis connection
-  dataQueue = new Queue('data-ingestion', { 
-    connection: {
-      host: redis.options.host,
-      port: redis.options.port,
-    }
-  });
+  // Pass all connection options (host, port, password, tls) so BullMQ's
+  // bundled ioredis connects correctly to TLS-only providers like Upstash.
+  bullmqConnOpts = {
+    host: redis.options.host,
+    port: redis.options.port,
+    maxRetriesPerRequest: null, // required by BullMQ
+  };
+  if (redis.options.password) bullmqConnOpts.password = redis.options.password;
+  if (redis.options.username) bullmqConnOpts.username = redis.options.username;
+  if (redis.options.tls) bullmqConnOpts.tls = redis.options.tls;
+
+  dataQueue = new Queue('data-ingestion', { connection: bullmqConnOpts });
 
   console.log('✅ Job queue initialized');
 
@@ -212,10 +219,7 @@ function createWorkers(): void {
       }
     },
     {
-      connection: {
-        host: redis.options.host,
-        port: redis.options.port,
-      },
+      connection: bullmqConnOpts!,
       concurrency: 3,
       maxStalledCount: 3,
       stalledInterval: 60000,

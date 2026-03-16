@@ -154,31 +154,48 @@ export async function fetchCrudePrices(startDate?: string, endDate?: string): Pr
       frequency: 'weekly',
       'data[0]': 'value',
       sort: [{ column: 'period', direction: 'desc' }],
-      offset: 0,
-      length: 500,
     };
 
     if (startDate) params.start = startDate;
     if (endDate) params.end = endDate;
 
-    // Fetch WTI (Cushing, OK spot price)
-    const wtiResponse = await axios.get(`${EIA_BASE_URL}/petroleum/pri/spt/data/`, {
-      params: {
-        ...params,
-        'facets[series][]': 'RWTC', // WTI Cushing spot price
-      },
-    });
+    const pageSize = 5000;
 
-    // Fetch Brent (Europe spot price)
-    const brentResponse = await axios.get(`${EIA_BASE_URL}/petroleum/pri/spt/data/`, {
-      params: {
-        ...params,
-        'facets[series][]': 'RBRTE', // Brent Europe spot price
-      },
-    });
+    // Fetch WTI (Cushing, OK spot price) with pagination
+    const wtiData: any[] = [];
+    let offset = 0;
+    while (true) {
+      const response = await axios.get(`${EIA_BASE_URL}/petroleum/pri/spt/data/`, {
+        params: {
+          ...params,
+          'facets[series][]': 'RWTC',
+          offset,
+          length: pageSize,
+        },
+      });
+      const page = response.data?.response?.data || [];
+      wtiData.push(...page);
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
 
-    const wtiData = wtiResponse.data?.response?.data || [];
-    const brentData = brentResponse.data?.response?.data || [];
+    // Fetch Brent (Europe spot price) with pagination
+    const brentData: any[] = [];
+    offset = 0;
+    while (true) {
+      const response = await axios.get(`${EIA_BASE_URL}/petroleum/pri/spt/data/`, {
+        params: {
+          ...params,
+          'facets[series][]': 'RBRTE',
+          offset,
+          length: pageSize,
+        },
+      });
+      const page = response.data?.response?.data || [];
+      brentData.push(...page);
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
 
     console.log(`Fetched ${wtiData.length} WTI points, ${brentData.length} Brent points`);
 

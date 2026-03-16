@@ -4,7 +4,9 @@ import { EnergyPrice } from '@fuelripple/shared';
 
 /**
  * Insert energy prices with deduplication.
- * Chunks rows to stay under PostgreSQL's 65535-parameter bind limit.
+ * Sorts by time then chunks into small batches so each batch touches
+ * few TimescaleDB hypertable partitions, staying within Azure PG's
+ * max_locks_per_transaction limit.
  */
 export async function insertPrices(prices: EnergyPrice[]): Promise<void> {
   if (prices.length === 0) {
@@ -13,10 +15,15 @@ export async function insertPrices(prices: EnergyPrice[]): Promise<void> {
   }
   
   const knex = getKnex();
-  const CHUNK = 1000; // 1000 rows × ~6 cols = 6000 params per batch
+  // Sort by time so consecutive rows land in the same hypertable chunk,
+  // minimising predicate-lock count per batch.
+  const sorted = [...prices].sort(
+    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+  );
+  const CHUNK = 50; // 50 rows × 6 cols = 300 params — small enough for Azure PG lock limits with TimescaleDB
 
-  for (let i = 0; i < prices.length; i += CHUNK) {
-    const chunk = prices.slice(i, i + CHUNK);
+  for (let i = 0; i < sorted.length; i += CHUNK) {
+    const chunk = sorted.slice(i, i + CHUNK);
     await knex('energy_prices')
       .insert(chunk)
       .onConflict(['time', 'source', 'metric', 'region'])
@@ -27,15 +34,30 @@ export async function insertPrices(prices: EnergyPrice[]): Promise<void> {
 /**
  * Refresh the pre-computed aggregate materialized views after new price data
  * is loaded.  Called by the BullMQ workers after each successful insertPrices.
- * Uses a plain (non-concurrent) refresh — safe because each view is tiny relative
- * to energy_prices and refresh runs at most once per ingestion job.
+ * Uses CONCURRENTLY to reduce lock pressure on TimescaleDB hypertables.
+ * Refreshes each view independently so one failure doesn't block the rest.
  */
 export async function refreshMaterializedViews(): Promise<void> {
   const knex = getKnex();
   for (const view of ['daily_prices', 'weekly_prices', 'monthly_prices']) {
-    await knex.raw(`REFRESH MATERIALIZED VIEW ${view};`);
+    try {
+      await knex.raw(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view};`);
+      console.log(`  ✅ ${view} refreshed`);
+    } catch (err: any) {
+      // CONCURRENTLY requires a unique index; fall back to non-concurrent
+      if (err.message?.includes('CONCURRENTLY') || err.code === '55000') {
+        try {
+          await knex.raw(`REFRESH MATERIALIZED VIEW ${view};`);
+          console.log(`  ✅ ${view} refreshed (non-concurrent fallback)`);
+        } catch (err2: any) {
+          console.warn(`  ⚠️  ${view} refresh failed: ${err2.message ?? err2}`);
+        }
+      } else {
+        console.warn(`  ⚠️  ${view} refresh failed: ${err.message ?? err}`);
+      }
+    }
   }
-  console.log('✅ Materialized views refreshed (daily, weekly, monthly)');
+  console.log('Materialized view refresh complete');
 }
 
 /**

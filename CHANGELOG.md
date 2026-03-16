@@ -9,6 +9,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.5-beta.0] - 2026-03-15
+
+### Added
+- **FRED crude oil in backfill** — `backfillCrudePrices()` now also fetches
+  DCOILWTICO (WTI) and DCOILBRENTEU (Brent) daily spot prices from FRED,
+  extending crude history back to 1986. Stored with `source='fred'` alongside
+  existing Yahoo Finance (`source='yahoo'`) data.
+- **Supply-squeeze alert** — new end-to-end feature: API `/supply/health`
+  returns a `squeezeAlert` object (active flag, affected regions, description)
+  when utilization z > 1 AND inventory z < −1 simultaneously. Frontend
+  `Supply.tsx` shows an amber alert banner when active.
+- **Methodology page** (`/methodology`) — documents every formula in
+  `@fuelripple/impact-engine` with reference constants, classification
+  thresholds, data-source freshness, pass-through lag table, and a full
+  **Supply Health Monitor** section covering utilization stress index, inventory
+  health, classification thresholds, and supply-squeeze trigger conditions.
+- **Footer restructured** — replaced single-line pipe-delimited footer with a
+  3-column responsive grid (brand | resource links | data sources) plus
+  copyright bar. Data Status moved from main nav to footer links.
+
+### Changed
+- **Disruption score recalibrated** — added 3-week EMA smoothing (α = 0.5) and
+  direction signal (rising / falling / stable). Volatility thresholds
+  recalibrated for gasoline: calm < 15%, moderate < 30%, elevated < 50%,
+  extreme ≥ 50%. DB query now uses `ROW_NUMBER` with source priority
+  (EIA > AAA) to avoid mixing daily AAA and weekly EIA data.
+- **Downstream impact rewritten** — extracted magic numbers into named
+  constants: `BASE_FREIGHT_RATE_PER_MILE` ($2.70), `DIESEL_COST_PER_MILE_FACTOR`
+  (0.16), `CPI_FREIGHT_ELASTICITY` (0.10–0.20), `FOOD_TRANSPORT_SHARE` (0.09).
+  Accepts rolling 52-week baseline via API. Added pass-through lag timelines.
+  Sankey diagram shows food as CPI subset (not additive).
+- **Supply health classification** — rewrote to use both utilization AND
+  inventory z-scores with cross-trigger logic. Days-of-supply now uses
+  `product_supplied_gas` (true implied demand) instead of production.
+- **Impact page** — `VolBadge` supports 4 levels, `DisruptionMeter` shows
+  direction arrow, volatility gauge labels match new thresholds, downstream
+  section shows dynamic baseline source and lag timelines.
+- **EIA crude price pagination** — `fetchCrudePrices()` now paginates (5000
+  rows per page) instead of hard-capping at 500 rows.
+
+### Fixed
+- **Backfill shared-memory errors** — reduced `insertPrices` chunk size from
+  1000 → 50 rows and sort by time before inserting, so each batch touches fewer
+  TimescaleDB hypertable partitions. Same fix applied to `insertIndicators`
+  (added chunking) and `upsertRefineryData` (500 → 200). `refreshMaterializedViews`
+  now handles each view independently with `CONCURRENTLY` fallback.
+- **Azure PostgreSQL `max_locks_per_transaction`** — increased from 64 → 256
+  to support materialized view refreshes across decades of hypertable chunks.
+
+### Data
+- **Maximum historical backfill** — pulled all available history from 1983:
+  - EIA gas prices: **41,238** records (29 regions, weekly from ~1993)
+  - Yahoo Finance crude: **11,049** records (WTI daily from 1983, Brent from 2007)
+  - FRED crude: **19,959** records (WTI daily from 1986, Brent from 1987)
+  - EIA diesel: **16,869** records (11 regions, weekly from ~1994)
+  - FRED economic indicators: **1,500** records (CPI, PPI from 1983)
+  - EIA refinery/supply: **17,218** records (utilization, production, stocks)
+
+---
+
 ## [1.0.4] - 2026-03-15
 ### Changed
 

@@ -36,10 +36,15 @@ export interface CapacityRow {
 export async function upsertRefineryData(rows: RefineryOperationsRow[]): Promise<void> {
   if (rows.length === 0) return;
   const knex = getKnex();
-  const CHUNK = 500; // 500 rows × 8 cols = 4000 params per batch
+  // Sort by time so each batch touches few TimescaleDB partitions,
+  // staying within Azure PG's max_locks_per_transaction limit.
+  const sorted = [...rows].sort(
+    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+  );
+  const CHUNK = 200; // 200 rows — safe for Azure PG shared-memory limits
 
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const chunk = rows.slice(i, i + CHUNK);
+  for (let i = 0; i < sorted.length; i += CHUNK) {
+    const chunk = sorted.slice(i, i + CHUNK);
     await knex('refinery_operations')
       .insert(chunk)
       .onConflict(['time', 'region'])

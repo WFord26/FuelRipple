@@ -2,15 +2,24 @@ import { getKnex } from '../index';
 import { EconomicIndicator } from '@fuelripple/shared';
 
 /**
- * Insert economic indicators
+ * Insert economic indicators with chunking.
+ * Sorts by time to minimise hypertable partition locks per batch.
  */
 export async function insertIndicators(indicators: EconomicIndicator[]): Promise<void> {
+  if (indicators.length === 0) return;
   const knex = getKnex();
-  
-  await knex('economic_indicators')
-    .insert(indicators)
-    .onConflict(['time', 'indicator', 'source'])
-    .ignore();
+  const sorted = [...indicators].sort(
+    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+  );
+  const CHUNK = 200;
+
+  for (let i = 0; i < sorted.length; i += CHUNK) {
+    const chunk = sorted.slice(i, i + CHUNK);
+    await knex('economic_indicators')
+      .insert(chunk)
+      .onConflict(['time', 'indicator', 'source'])
+      .ignore();
+  }
 }
 
 /**

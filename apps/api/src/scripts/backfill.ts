@@ -50,6 +50,7 @@ import { fetchCrudeHistory } from '../services/marketClient';
 
 import {
   fetchEconomicIndicators,
+  fetchCrudePricesFromFRED,
 } from '../services/fredClient';
 
 import {
@@ -227,12 +228,56 @@ async function backfillCrudePrices(start: string, end: string, dryRun: boolean):
   }
   log(`Brent: ${brent.length} daily bars (${prices.filter(p => p.metric === 'crude_brent').length} valid)`);
 
-  log(`Prepared ${prices.length} crude price records`);
+  log(`Prepared ${prices.length} Yahoo Finance crude price records`);
   if (!dryRun) {
     await insertPrices(prices);
-    log(`✅ Inserted ${prices.length} crude price records`);
+    log(`✅ Inserted ${prices.length} Yahoo Finance crude price records`);
   } else {
     log(`[dry-run] Would insert ${prices.length} crude price records`);
+  }
+
+  // ── FRED crude oil (DCOILWTICO / DCOILBRENTEU) — extends back to 1986 ────
+  separator('FRED  ▸  Crude Oil Daily Spot Prices (WTI + Brent)');
+  log(`Date range: ${start} → ${end}`);
+  log('Series: DCOILWTICO (WTI), DCOILBRENTEU (Brent) — daily spot');
+
+  const fredCrude = await fetchCrudePricesFromFRED(start, end);
+  const fredPrices: EnergyPrice[] = [];
+
+  for (const point of fredCrude.wti) {
+    const val = parseFloat(point.value);
+    if (isNaN(val) || val <= 0) continue;
+    fredPrices.push({
+      time: new Date(point.date),
+      source: 'fred',
+      metric: 'crude_wti',
+      region: 'US',
+      value: val,
+      unit: 'usd_per_barrel',
+    });
+  }
+  log(`FRED WTI: ${fredCrude.wti.length} observations (${fredPrices.filter(p => p.metric === 'crude_wti').length} valid)`);
+
+  for (const point of fredCrude.brent) {
+    const val = parseFloat(point.value);
+    if (isNaN(val) || val <= 0) continue;
+    fredPrices.push({
+      time: new Date(point.date),
+      source: 'fred',
+      metric: 'crude_brent',
+      region: 'US',
+      value: val,
+      unit: 'usd_per_barrel',
+    });
+  }
+  log(`FRED Brent: ${fredCrude.brent.length} observations (${fredPrices.filter(p => p.metric === 'crude_brent').length} valid)`);
+
+  log(`Prepared ${fredPrices.length} FRED crude price records`);
+  if (!dryRun) {
+    await insertPrices(fredPrices);
+    log(`✅ Inserted ${fredPrices.length} FRED crude price records`);
+  } else {
+    log(`[dry-run] Would insert ${fredPrices.length} FRED crude price records`);
   }
 }
 

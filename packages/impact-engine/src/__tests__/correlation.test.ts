@@ -120,26 +120,56 @@ describe('estimateGasPriceFromCrude', () => {
 describe('analyzeRocketsAndFeathers', () => {
   it('detects symmetric price movements', () => {
     // Equal magnitude response to increases and decreases
-    const gasChanges = [0.02, -0.02, 0.01, -0.01];
-    const oilChanges = [0.05, -0.05, 0.03, -0.03];
+    const gasChanges = [0.02, -0.02, 0.01, -0.01, 0.015, -0.015, 0.01, -0.01, 0.02, -0.02, 0.01, -0.01];
+    const oilChanges = [0.05, -0.05, 0.03, -0.03, 0.04,  -0.04,  0.03, -0.03, 0.05, -0.05, 0.03, -0.03];
 
     const result = analyzeRocketsAndFeathers(gasChanges, oilChanges);
 
     expect(result.avgIncreaseSpeed).toBeGreaterThan(0);
     expect(result.avgDecreaseSpeed).toBeGreaterThan(0);
-    // Should be roughly symmetric (ratio ~1)
+    // Elasticity ratio should be roughly symmetric (~1)
+    expect(result.elasticityRatio).toBeCloseTo(1.0, 0);
+    // Legacy ratio should also be near 1
     expect(result.asymmetryRatio).toBeCloseTo(1.0, 1);
+    // Both elasticities should be similar
+    expect(result.riseElasticity).toBeGreaterThan(0);
+    expect(result.fallElasticity).toBeGreaterThan(0);
   });
 
   it('detects rockets and feathers effect', () => {
     // Gas rises faster when oil goes up, drops slowly when oil goes down
-    const gasChanges = [0.05, -0.01, 0.04, -0.005];
-    const oilChanges = [0.05, -0.05, 0.03, -0.03];
+    const gasChanges = [0.05, -0.01, 0.04, -0.005, 0.03, -0.008, 0.04, -0.01, 0.05, -0.005, 0.03, -0.01];
+    const oilChanges = [0.05, -0.05, 0.03, -0.03,  0.04, -0.04,  0.03, -0.03, 0.05, -0.05,  0.04, -0.04];
 
     const result = analyzeRocketsAndFeathers(gasChanges, oilChanges);
 
-    expect(result.asymmetryRatio).toBeGreaterThan(1);
+    expect(result.elasticityRatio).toBeGreaterThan(1);
+    expect(result.riseElasticity).toBeGreaterThan(result.fallElasticity);
     expect(result.avgIncreaseSpeed).toBeGreaterThan(result.avgDecreaseSpeed);
+  });
+
+  it('returns cumulative pass-through data', () => {
+    // Need enough data points for cumulative analysis (shock + 6-week window)
+    const gasChanges = [0.03, 0.005, 0.002, 0.001, 0, 0, -0.01, -0.005, -0.003, -0.002, -0.001, 0];
+    const oilChanges = [0.06, 0,     0,     0,     0, 0, -0.06,  0,      0,      0,      0,     0];
+
+    const result = analyzeRocketsAndFeathers(gasChanges, oilChanges);
+
+    expect(result.cumulativePassThrough).toHaveLength(5); // lags 0 through 4
+    expect(result.cumulativePassThrough[0].lag).toBe(0);
+    expect(result.cumulativePassThrough[4].lag).toBe(4);
+  });
+
+  it('returns half-life metrics', () => {
+    const gasChanges = [0.03, 0.005, 0.002, 0.001, 0, 0, -0.01, -0.005, -0.003, -0.002, -0.001, 0];
+    const oilChanges = [0.06, 0,     0,     0,     0, 0, -0.06,  0,      0,      0,      0,     0];
+
+    const result = analyzeRocketsAndFeathers(gasChanges, oilChanges);
+
+    expect(typeof result.riseHalfLifeWeeks).toBe('number');
+    expect(typeof result.fallHalfLifeWeeks).toBe('number');
+    expect(result.riseHalfLifeWeeks).toBeGreaterThanOrEqual(0);
+    expect(result.fallHalfLifeWeeks).toBeGreaterThanOrEqual(0);
   });
 
   it('throws error for mismatched array lengths', () => {
@@ -157,5 +187,6 @@ describe('analyzeRocketsAndFeathers', () => {
     expect(result.avgIncreaseSpeed).toBe(0);
     expect(result.avgDecreaseSpeed).toBe(0);
     expect(result.asymmetryRatio).toBe(0);
+    expect(result.elasticityRatio).toBe(0);
   });
 });

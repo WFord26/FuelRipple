@@ -459,8 +459,6 @@ export default function Correlation() {
 
   const rf = rfData?.data ?? rfData;
   const asymmetryRatio: number = rf?.elasticityRatio ?? rf?.asymmetryRatio ?? 0;
-  const avgRise: number        = rf?.avgIncreaseSpeed ?? 0;
-  const avgFall: number        = rf?.avgDecreaseSpeed ?? 0;
   const riseElasticity: number = rf?.riseElasticity ?? 0;
   const fallElasticity: number = rf?.fallElasticity ?? 0;
   const cumulativePassThrough: { lag: number; risePct: number; fallPct: number }[] =

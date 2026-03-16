@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.0.3-beta.0] - 2026-03-15
 ### Added
 - **WTI Crude Oil card** on the dashboard — displays latest WTI closing price with
   pump-price sensitivity note ($10/bbl ≈ $0.25/gal), sourced from existing

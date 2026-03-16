@@ -37,7 +37,8 @@ function VolBadge({ level }: { level: string }) {
   const styles: Record<string, string> = {
     calm:     'bg-green-500/15  text-green-400  border-green-500/30',
     moderate: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
-    high:     'bg-red-500/15    text-red-400    border-red-500/30',
+    elevated: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+    extreme:  'bg-red-500/15    text-red-400    border-red-500/30',
   };
   return (
     <span className={`inline-block px-3 py-0.5 rounded-full border text-xs font-semibold uppercase tracking-wide ${styles[level] ?? styles.calm}`}>
@@ -375,6 +376,7 @@ export default function Impact() {
               <DisruptionMeter
                 score={Math.abs(disruption.score)}
                 classification={disruption.classification}
+                direction={disruption.direction}
               />
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div className="bg-slate-700/40 rounded-lg px-4 py-3 border border-slate-600/50">
@@ -384,13 +386,19 @@ export default function Impact() {
                   </div>
                 </div>
                 <div className="bg-slate-700/40 rounded-lg px-4 py-3 border border-slate-600/50">
-                  <div className="text-xs text-slate-400 mb-0.5">Z-Score</div>
+                  <div className="text-xs text-slate-400 mb-0.5">Z-Score (smoothed)</div>
                   <div className="text-white font-bold tabular-nums">
                     {disruption.score >= 0 ? '+' : ''}{disruption.score.toFixed(2)}σ
                   </div>
+                  {disruption.rawScore != null && Math.abs(disruption.rawScore - disruption.score) > 0.1 && (
+                    <div className="text-xs text-slate-500 mt-0.5 tabular-nums">
+                      raw: {disruption.rawScore >= 0 ? '+' : ''}{disruption.rawScore.toFixed(2)}σ
+                    </div>
+                  )}
                 </div>
               </div>
             </>
+
           ) : (
             <div className="text-slate-500 text-sm text-center py-12">No disruption data available</div>
           )}
@@ -425,16 +433,18 @@ export default function Impact() {
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
                       volatility.classification === 'calm'     ? 'bg-green-500' :
-                      volatility.classification === 'moderate' ? 'bg-yellow-400' : 'bg-red-500'
+                      volatility.classification === 'moderate' ? 'bg-yellow-400' :
+                      volatility.classification === 'elevated' ? 'bg-orange-500' : 'bg-red-500'
                     }`}
                     style={{ width: `${Math.min(volatility.annualizedVolatility / 100 * 100, 100)}%` }}
                   />
                 </div>
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>0%</span>
-                  <span className="text-green-500">calm &lt;30%</span>
-                  <span className="text-yellow-400">moderate 30–60%</span>
-                  <span className="text-red-400">high &gt;60%</span>
+                  <span className="text-green-500">calm &lt;15%</span>
+                  <span className="text-yellow-400">moderate 15–30%</span>
+                  <span className="text-orange-400">elevated 30–50%</span>
+                  <span className="text-red-400">extreme &gt;50%</span>
                   <span>100%</span>
                 </div>
               </div>
@@ -495,7 +505,9 @@ export default function Impact() {
                   {downstream.diesel.increase >= 0 ? '+' : ''}${downstream.diesel.increase.toFixed(3)} vs baseline
                 </div>
                 <div className="text-xs text-slate-600 mt-0.5">
-                  Baseline: ${downstream.diesel.baseline.toFixed(2)}/gal (DOE ref)
+                  Baseline: ${downstream.diesel.baseline.toFixed(2)}/gal
+                  {downstream.diesel.baselineSource === 'rolling_52w' ? ' (52-week ago)' :
+                   downstream.diesel.baselineSource === 'doe_reference' ? ' (DOE ref)' : ' (custom)'}
                 </div>
                 {/* Arrow */}
                 <div className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 text-slate-500 text-lg z-10">→</div>
@@ -535,10 +547,15 @@ export default function Impact() {
                     <span className="tabular-nums font-medium">{downstream.consumer.minCPIIncrease.toFixed(2)}% – {downstream.consumer.maxCPIIncrease.toFixed(2)}%</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-400">Food price impact</span>
+                    <span className="text-slate-400">Food (subset of CPI)</span>
                     <span className="tabular-nums font-medium text-orange-400">+{downstream.consumer.foodPriceIncrease.toFixed(2)}%</span>
                   </div>
                 </div>
+                {downstream.lag && (
+                  <div className="mt-3 text-xs text-slate-500 border-t border-slate-700/50 pt-2">
+                    ⏱ CPI pass-through: {downstream.lag.consumerGoods.label} · Food: {downstream.lag.foodPrices.label}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -553,6 +570,7 @@ export default function Impact() {
                     <tr className="text-xs text-slate-400 uppercase tracking-wide border-b border-slate-700">
                       <th className="pb-2 pr-6 font-medium">Stage</th>
                       <th className="pb-2 pr-6 font-medium">Impact</th>
+                      <th className="pb-2 pr-6 font-medium">Lag</th>
                       <th className="pb-2 font-medium">Source</th>
                     </tr>
                   </thead>
@@ -560,31 +578,39 @@ export default function Impact() {
                     <tr>
                       <td className="py-2.5 pr-6 text-slate-300">$1/gal diesel increase</td>
                       <td className="py-2.5 pr-6 text-amber-400 font-medium tabular-nums">+15–17¢/mile trucking cost</td>
+                      <td className="py-2.5 pr-6 text-slate-500 text-xs">1-2 weeks</td>
                       <td className="py-2.5 text-slate-500 text-xs">ATRI Operational Costs Study</td>
                     </tr>
                     <tr>
                       <td className="py-2.5 pr-6 text-slate-300">Trucking cost increase</td>
-                      <td className="py-2.5 pr-6 text-amber-400 font-medium tabular-nums">5–10% freight rate increase</td>
+                      <td className="py-2.5 pr-6 text-amber-400 font-medium tabular-nums">~5.9% freight rate per $1 diesel (vs $2.70/mi base)</td>
+                      <td className="py-2.5 pr-6 text-slate-500 text-xs">1-2 weeks</td>
                       <td className="py-2.5 text-slate-500 text-xs">DAT / FreightWaves SONAR</td>
                     </tr>
                     <tr>
-                      <td className="py-2.5 pr-6 text-slate-300">Freight rate increase</td>
+                      <td className="py-2.5 pr-6 text-slate-300">Freight rate → CPI</td>
                       <td className="py-2.5 pr-6 text-red-400 font-medium tabular-nums">0.5–2% consumer goods increase</td>
+                      <td className="py-2.5 pr-6 text-slate-500 text-xs">2-6 months</td>
                       <td className="py-2.5 text-slate-500 text-xs">BLS PPI for Truck Transport</td>
                     </tr>
                     <tr>
-                      <td className="py-2.5 pr-6 text-slate-300">Food specifically</td>
+                      <td className="py-2.5 pr-6 text-slate-300">Food (subset of CPI)</td>
                       <td className="py-2.5 pr-6 text-orange-400 font-medium tabular-nums">~9% of retail food cost is transport</td>
+                      <td className="py-2.5 pr-6 text-slate-500 text-xs">1-3 months</td>
                       <td className="py-2.5 text-slate-500 text-xs">USDA Economic Research Service</td>
                     </tr>
                     <tr>
                       <td className="py-2.5 pr-6 text-slate-300">Macro pass-through</td>
                       <td className="py-2.5 pr-6 text-red-400 font-medium tabular-nums">1% gas price ↑ → 0.04% CPI ↑</td>
+                      <td className="py-2.5 pr-6 text-slate-500 text-xs">3-6 months</td>
                       <td className="py-2.5 text-slate-500 text-xs">IMF Working Paper 2021/271</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
+              <p className="text-xs text-slate-600 mt-3">
+                ⏱ Numbers shown reflect estimated steady-state impact. Freight surcharges hit within weeks; consumer goods and food prices take months to fully adjust.
+              </p>
             </div>
 
             {/* ── Household grocery estimate ──────────────────────────────── */}

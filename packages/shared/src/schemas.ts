@@ -3,7 +3,7 @@ import { z } from 'zod';
 // Energy Price Schema
 export const EnergyPriceSchema = z.object({
   time: z.date(),
-  source: z.enum(['eia', 'fred', 'oilprice', 'aaa', 'yahoo', 'estimated']),
+  source: z.enum(['eia', 'fred', 'oilprice', 'aaa', 'aaa_wayback', 'yahoo', 'estimated']),
   metric: z.enum(['gas_regular', 'gas_midgrade', 'gas_premium', 'diesel', 'crude_wti', 'crude_brent']),
   region: z.string().default('US'),
   value: z.number(),
@@ -47,8 +47,10 @@ export type EconomicIndicator = z.infer<typeof EconomicIndicatorSchema>;
 
 // Disruption Score Schema
 export const DisruptionScoreSchema = z.object({
-  score: z.number(),
+  score: z.number(),                   // EMA-smoothed z-score
+  rawScore: z.number().optional(),     // unsmoothed single-week z-score
   classification: z.enum(['normal', 'elevated', 'high', 'crisis']),
+  direction: z.enum(['rising', 'falling', 'stable']).optional(),
   weeklyChange: z.number(),
   annualizedVolatility: z.number(),
   timestamp: z.date(),

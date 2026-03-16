@@ -3,6 +3,7 @@ import {
   calculateDisruptionScore,
   calculateAnnualizedVolatility,
   getVolatilityClassification,
+  classifyDirection,
 } from '../disruption';
 
 describe('calculateDisruptionScore', () => {
@@ -13,7 +14,9 @@ describe('calculateDisruptionScore', () => {
     const result = calculateDisruptionScore(3.50, 3.45, weeklyChanges);
 
     expect(result).toHaveProperty('score');
+    expect(result).toHaveProperty('rawScore');
     expect(result).toHaveProperty('classification');
+    expect(result).toHaveProperty('direction');
     expect(result).toHaveProperty('weeklyChange');
     expect(result).toHaveProperty('annualizedVolatility');
     expect(result).toHaveProperty('timestamp');
@@ -49,6 +52,32 @@ describe('calculateDisruptionScore', () => {
     expect(Math.abs(result.score)).toBeGreaterThanOrEqual(3.0);
   });
 
+  it('returns rising direction for price increases', () => {
+    const weeklyChanges = Array.from({ length: 50 }, () => 0.002);
+    const result = calculateDisruptionScore(3.60, 3.50, weeklyChanges);
+    expect(result.direction).toBe('rising');
+  });
+
+  it('returns falling direction for price decreases', () => {
+    const weeklyChanges = Array.from({ length: 50 }, () => 0.002);
+    const result = calculateDisruptionScore(3.40, 3.50, weeklyChanges);
+    expect(result.direction).toBe('falling');
+  });
+
+  it('returns stable direction for tiny changes', () => {
+    const weeklyChanges = Array.from({ length: 50 }, () => 0.002);
+    const result = calculateDisruptionScore(3.501, 3.50, weeklyChanges);
+    expect(result.direction).toBe('stable');
+  });
+
+  it('smoothed score is less extreme than raw score', () => {
+    // All small changes then a big spike → smoothing should dampen it
+    const weeklyChanges = Array.from({ length: 50 }, () => 0.002);
+    const result = calculateDisruptionScore(4.20, 3.50, weeklyChanges);
+    // rawScore should be >= smoothed score because the prior weeks were calm
+    expect(Math.abs(result.rawScore!)).toBeGreaterThanOrEqual(Math.abs(result.score));
+  });
+
   it('calculates weeklyChange as percentage', () => {
     const weeklyChanges = [0.01, 0.02, -0.01, 0.005];
     const result = calculateDisruptionScore(3.60, 3.50, weeklyChanges);
@@ -62,6 +91,24 @@ describe('calculateDisruptionScore', () => {
     const result = calculateDisruptionScore(3.50, 3.48, weeklyChanges);
 
     expect(result.annualizedVolatility).toBeGreaterThan(0);
+  });
+});
+
+describe('classifyDirection', () => {
+  it('returns rising for positive change above threshold', () => {
+    expect(classifyDirection(0.01)).toBe('rising');
+    expect(classifyDirection(0.05)).toBe('rising');
+  });
+
+  it('returns falling for negative change below threshold', () => {
+    expect(classifyDirection(-0.01)).toBe('falling');
+    expect(classifyDirection(-0.05)).toBe('falling');
+  });
+
+  it('returns stable for small changes', () => {
+    expect(classifyDirection(0.003)).toBe('stable');
+    expect(classifyDirection(-0.003)).toBe('stable');
+    expect(classifyDirection(0)).toBe('stable');
   });
 });
 
@@ -100,24 +147,27 @@ describe('calculateAnnualizedVolatility', () => {
 });
 
 describe('getVolatilityClassification', () => {
-  it('returns calm for volatility below 30', () => {
-    expect(getVolatilityClassification(10)).toBe('calm');
-    expect(getVolatilityClassification(29.9)).toBe('calm');
-  });
-
-  it('returns moderate for volatility between 30 and 60', () => {
-    expect(getVolatilityClassification(30)).toBe('moderate');
-    expect(getVolatilityClassification(45)).toBe('moderate');
-    expect(getVolatilityClassification(59.9)).toBe('moderate');
-  });
-
-  it('returns high for volatility 60 or above', () => {
-    expect(getVolatilityClassification(60)).toBe('high');
-    expect(getVolatilityClassification(100)).toBe('high');
-    expect(getVolatilityClassification(200)).toBe('high');
-  });
-
-  it('returns calm for zero', () => {
+  it('returns calm for volatility below 15', () => {
     expect(getVolatilityClassification(0)).toBe('calm');
+    expect(getVolatilityClassification(10)).toBe('calm');
+    expect(getVolatilityClassification(14.9)).toBe('calm');
+  });
+
+  it('returns moderate for volatility between 15 and 30', () => {
+    expect(getVolatilityClassification(15)).toBe('moderate');
+    expect(getVolatilityClassification(20)).toBe('moderate');
+    expect(getVolatilityClassification(29.9)).toBe('moderate');
+  });
+
+  it('returns elevated for volatility between 30 and 50', () => {
+    expect(getVolatilityClassification(30)).toBe('elevated');
+    expect(getVolatilityClassification(40)).toBe('elevated');
+    expect(getVolatilityClassification(49.9)).toBe('elevated');
+  });
+
+  it('returns extreme for volatility 50 or above', () => {
+    expect(getVolatilityClassification(50)).toBe('extreme');
+    expect(getVolatilityClassification(100)).toBe('extreme');
+    expect(getVolatilityClassification(200)).toBe('extreme');
   });
 });

@@ -50,6 +50,8 @@ const PKG_PATHS = {
   root: path.join(ROOT, 'package.json'),
 };
 
+const README_PATH = path.join(ROOT, 'README.md');
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -191,6 +193,21 @@ if (!dryRun) {
   writePkg(PKG_PATHS.root, rootPkg);
 }
 
+// Update the version badge in README.md
+// Replace hyphens with dots for badge display: 1.0.1-beta.0 → 1.0.1.beta.0
+const badgeVersion = highestNew.replace(/-/g, '.');
+const readmeContent = fs.readFileSync(README_PATH, 'utf8');
+const updatedReadme = readmeContent.replace(
+  /!\[Version\]\(https:\/\/img\.shields\.io\/badge\/version-[^)]*-blue\)/,
+  `![Version](https://img.shields.io/badge/version-${badgeVersion}-blue)`
+);
+if (updatedReadme !== readmeContent) {
+  if (!dryRun) {
+    fs.writeFileSync(README_PATH, updatedReadme, 'utf8');
+  }
+  console.log(`  README.md badge → ${highestNew}`);
+}
+
 // ---------------------------------------------------------------------------
 // Print summary
 // ---------------------------------------------------------------------------
@@ -208,6 +225,7 @@ console.log(separator);
 const relPaths = [
   ...changes.map(c => path.relative(ROOT, c.pkgPath).replace(/\\/g, '/')),
   'package.json',
+  'README.md',
 ];
 
 const commitMsg = bumpType === 'release'

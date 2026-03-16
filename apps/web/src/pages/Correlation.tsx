@@ -122,41 +122,42 @@ function RocketsFeathersViz({
   const fallPct  = maxElasticity > 0 ? (fallElasticity / maxElasticity) * 100 : 0;
 
   const ratioColor =
-    asymmetryRatio > 3 ? 'text-red-400' :
-    asymmetryRatio > 2 ? 'text-orange-400' :
-    asymmetryRatio > 1.5 ? 'text-yellow-400' : 'text-green-400';
+    asymmetryRatio > 1.3 ? 'text-red-400' :
+    asymmetryRatio > 1.15 ? 'text-orange-400' :
+    asymmetryRatio > 1.05 ? 'text-yellow-400' : 'text-green-400';
 
   const ratioLabel =
-    asymmetryRatio > 3 ? 'Severe asymmetry' :
-    asymmetryRatio > 2 ? 'Strong asymmetry' :
-    asymmetryRatio > 1.5 ? 'Moderate asymmetry' : 'Near-symmetric';
+    asymmetryRatio > 1.3 ? 'Strong asymmetry' :
+    asymmetryRatio > 1.15 ? 'Moderate asymmetry' :
+    asymmetryRatio > 1.05 ? 'Mild asymmetry' : 'Near-symmetric';
 
   return (
     <div className="space-y-5">
-      {/* Elasticity ratio hero */}
+      {/* Pass-through speed ratio hero */}
       <div className="flex items-center gap-6">
         <div className="text-center min-w-[80px]">
           <div className={`text-5xl font-bold tabular-nums ${ratioColor}`}>
-            {asymmetryRatio > 0 ? `${asymmetryRatio.toFixed(1)}×` : '—'}
+            {asymmetryRatio > 0 ? `${asymmetryRatio.toFixed(2)}×` : '—'}
           </div>
-          <div className="text-xs text-slate-400 mt-1 uppercase tracking-wide">Elasticity ratio</div>
+          <div className="text-xs text-slate-400 mt-1 uppercase tracking-wide">Speed ratio</div>
           <div className={`text-xs font-semibold mt-0.5 ${ratioColor}`}>{ratioLabel}</div>
         </div>
         <div className="flex-1 text-sm text-slate-400 leading-relaxed">
-          When crude rises 1%, gas responds with <span className="text-red-400 font-semibold">{(riseElasticity * 100).toFixed(1)}%</span> at the pump.
-          When crude falls 1%, gas only drops <span className="text-green-400 font-semibold">{(fallElasticity * 100).toFixed(1)}%</span>.
-          That's a <span className={`font-semibold ${ratioColor}`}>{asymmetryRatio.toFixed(1)}× elasticity gap</span>.
+          After a crude price shock, on average <span className="text-red-400 font-semibold">{riseElasticity.toFixed(1)}%</span> of
+          a crude increase has passed through to the pump, 
+          vs only <span className="text-green-400 font-semibold">{fallElasticity.toFixed(1)}%</span> of a decrease — price
+          rises pass through <span className={`font-semibold ${ratioColor}`}>{asymmetryRatio.toFixed(2)}× faster</span>.
         </div>
       </div>
 
-      {/* Elasticity comparison bars */}
+      {/* Speed comparison bars */}
       <div className="space-y-3">
         <div className="space-y-1.5">
           <div className="flex justify-between text-sm">
             <span className="flex items-center gap-2 text-red-400 font-medium">
-              <span>🚀</span> Rise elasticity (crude ↑)
+              <span>🚀</span> Rise pass-through speed
             </span>
-            <span className="text-slate-300 tabular-nums">{(riseElasticity * 100).toFixed(1)}% gas per 1% crude</span>
+            <span className="text-slate-300 tabular-nums">{riseElasticity.toFixed(1)}% avg cumulative</span>
           </div>
           <div className="h-3 rounded-full bg-slate-700 overflow-hidden">
             <div
@@ -169,9 +170,9 @@ function RocketsFeathersViz({
         <div className="space-y-1.5">
           <div className="flex justify-between text-sm">
             <span className="flex items-center gap-2 text-green-400 font-medium">
-              <span>🪶</span> Fall elasticity (crude ↓)
+              <span>🪶</span> Fall pass-through speed
             </span>
-            <span className="text-slate-300 tabular-nums">{(fallElasticity * 100).toFixed(1)}% gas per 1% crude</span>
+            <span className="text-slate-300 tabular-nums">{fallElasticity.toFixed(1)}% avg cumulative</span>
           </div>
           <div className="h-3 rounded-full bg-slate-700 overflow-hidden">
             <div

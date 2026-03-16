@@ -10,7 +10,6 @@ const navigation = [
   { name: 'Correlation',  path: '/correlation' },
   { name: 'Downstream',   path: '/downstream' },
   { name: 'State Prices', path: '/state-prices' },
-  { name: 'Data Status',  path: '/data-status' },
 ];
 
 export default function Layout() {
@@ -100,18 +99,45 @@ export default function Layout() {
 
       {/* Footer */}
       <footer className="bg-slate-800 border-t border-slate-700 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <p className="text-center text-slate-400 text-sm">
-            Data sources: EIA, FRED | Built with React + Node + TimescaleDB |{' '}
-            <a
-              href="https://github.com/WFord26/FuelRipple"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-slate-200 underline"
-            >
-              GitHub
-            </a>
-          </p>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm text-slate-400">
+            {/* Brand */}
+            <div>
+              <span className="text-lg font-bold text-white">
+                <span className="text-primary-400">Fuel</span>Ripple
+              </span>
+              <p className="mt-1 text-slate-500">
+                Tracking US gasoline prices &amp; consumer impact
+              </p>
+            </div>
+
+            {/* Links */}
+            <div className="space-y-1.5">
+              <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Resources</p>
+              <Link to="/methodology" className="block hover:text-slate-200 transition-colors">Methodology</Link>
+              <Link to="/data-status" className="block hover:text-slate-200 transition-colors">Data Status</Link>
+              <a
+                href="https://github.com/WFord26/FuelRipple"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block hover:text-slate-200 transition-colors"
+              >
+                GitHub ↗
+              </a>
+            </div>
+
+            {/* Data sources */}
+            <div className="space-y-1.5">
+              <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Data Sources</p>
+              <p>EIA — Weekly Petroleum Status Report</p>
+              <p>FRED — Federal Reserve Economic Data</p>
+              <p>BLS — CPI &amp; PPI Indicators</p>
+            </div>
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-slate-700/60 text-center text-xs text-slate-600">
+            © {new Date().getFullYear()} FuelRipple · Built with React, Express &amp; TimescaleDB
+          </div>
         </div>
       </footer>
     </div>

@@ -106,10 +106,10 @@ router.get('/rockets-feathers', async (req: Request, res: Response, next: NextFu
       status: 'success',
       data: analysis,
       interpretation: {
-        message: analysis.elasticityRatio > 1.5
+        message: analysis.elasticityRatio > 1.15
           ? 'Prices rise significantly faster than they fall (rockets and feathers effect)'
-          : analysis.elasticityRatio > 1.1
-            ? 'Prices show moderate upward asymmetry'
+          : analysis.elasticityRatio > 1.05
+            ? 'Prices show mild upward asymmetry'
             : 'Price movements are relatively symmetric',
         ratio: analysis.elasticityRatio,
         legacyRatio: analysis.asymmetryRatio,

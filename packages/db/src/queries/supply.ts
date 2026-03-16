@@ -36,10 +36,15 @@ export interface CapacityRow {
 export async function upsertRefineryData(rows: RefineryOperationsRow[]): Promise<void> {
   if (rows.length === 0) return;
   const knex = getKnex();
-  const CHUNK = 500; // 500 rows × 8 cols = 4000 params per batch
+  // Sort by time so each batch touches few TimescaleDB partitions,
+  // staying within Azure PG's max_locks_per_transaction limit.
+  const sorted = [...rows].sort(
+    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+  );
+  const CHUNK = 200; // 200 rows — safe for Azure PG shared-memory limits
 
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const chunk = rows.slice(i, i + CHUNK);
+  for (let i = 0; i < sorted.length; i += CHUNK) {
+    const chunk = sorted.slice(i, i + CHUNK);
     await knex('refinery_operations')
       .insert(chunk)
       .onConflict(['time', 'region'])
@@ -147,7 +152,16 @@ export async function getProductionData(region: string = 'US', weeks: number = 5
 
 /**
  * Weekly gasoline + distillate stock levels with days-of-supply calculation.
- * days_of_supply = stocks / 4-week avg daily demand (approx from production proxy)
+ *
+ * days_of_supply = stocks / daily implied demand (product_supplied).
+ * product_supplied is the EIA's implied demand measure:
+ *   production + imports − exports ± Δstocks
+ * Falls back to production as a proxy if product_supplied is NULL.
+ *
+ * NOTE: The 52-week rolling window compares against the trailing year rather
+ * than a true 5-year seasonal average (architecture §4.6.2 spec).  The project
+ * doesn't yet have 5 years of data; when it does, switch to a same-calendar-week
+ * comparison across multiple years for proper seasonal normalisation.
  */
 export async function getInventoryData(region: string = 'US', weeks: number = 104): Promise<any[]> {
   const knex = getKnex();
@@ -161,16 +175,19 @@ export async function getInventoryData(region: string = 'US', weeks: number = 10
         distillate_stocks,
         gasoline_production,
         distillate_production,
-        -- Gasoline days-of-supply: stocks / (daily avg production as demand proxy)
+        product_supplied_gas,
+        product_supplied_dist,
+        -- Gasoline days-of-supply: stocks / daily implied demand
+        -- Prefer product_supplied (true demand), fall back to production proxy
         CASE
-          WHEN gasoline_production > 0
-          THEN (gasoline_stocks / (gasoline_production / 7.0))
+          WHEN COALESCE(product_supplied_gas, gasoline_production) > 0
+          THEN (gasoline_stocks / (COALESCE(product_supplied_gas, gasoline_production) / 7.0))
           ELSE NULL
         END AS gasoline_days_supply,
         -- Distillate days-of-supply
         CASE
-          WHEN distillate_production > 0
-          THEN (distillate_stocks / (distillate_production / 7.0))
+          WHEN COALESCE(product_supplied_dist, distillate_production) > 0
+          THEN (distillate_stocks / (COALESCE(product_supplied_dist, distillate_production) / 7.0))
           ELSE NULL
         END AS distillate_days_supply,
         AVG(gasoline_stocks) OVER (
@@ -273,17 +290,36 @@ export async function getSupplyHealth(): Promise<any[]> {
               (c.gasoline_stocks  - s.avg_stocks) / s.std_stocks) / 2.0
         ELSE 0
       END AS composite_z,
-      -- Human-readable classification
+      -- Human-readable classification (uses BOTH util AND inventory z-scores)
+      -- Architecture §4.6.1-§4.6.2: supply-squeeze triggers when inventory z < -1
+      -- AND utilization z < -1.5 simultaneously.
       CASE
-        WHEN (c.utilization_pct - s.avg_util) / NULLIF(s.std_util, 0) > -0.5
-          AND (c.gasoline_stocks - s.avg_stocks) / NULLIF(s.std_stocks, 0) > -0.5
-        THEN 'normal'
-        WHEN (c.utilization_pct - s.avg_util) / NULLIF(s.std_util, 0) > -1.5
-        THEN 'elevated_risk'
-        WHEN (c.utilization_pct - s.avg_util) / NULLIF(s.std_util, 0) > -2.5
+        -- Critical: either dimension is extreme, OR both are stressed
+        WHEN COALESCE((c.utilization_pct - s.avg_util) / NULLIF(s.std_util, 0), 0) <= -2.5
+          OR COALESCE((c.gasoline_stocks - s.avg_stocks) / NULLIF(s.std_stocks, 0), 0) <= -2.5
+        THEN 'critical'
+        -- Supply stress: utilization OR inventory severely below norm,
+        -- OR supply-squeeze cross-trigger (both moderately stressed)
+        WHEN COALESCE((c.utilization_pct - s.avg_util) / NULLIF(s.std_util, 0), 0) <= -1.5
+          OR COALESCE((c.gasoline_stocks - s.avg_stocks) / NULLIF(s.std_stocks, 0), 0) <= -2.0
+          OR (
+            COALESCE((c.utilization_pct - s.avg_util) / NULLIF(s.std_util, 0), 0) <= -1.0
+            AND COALESCE((c.gasoline_stocks - s.avg_stocks) / NULLIF(s.std_stocks, 0), 0) <= -1.0
+          )
         THEN 'supply_stress'
-        ELSE 'critical'
-      END AS classification
+        -- Elevated risk: either dimension moderately below norm
+        WHEN COALESCE((c.utilization_pct - s.avg_util) / NULLIF(s.std_util, 0), 0) <= -0.5
+          OR COALESCE((c.gasoline_stocks - s.avg_stocks) / NULLIF(s.std_stocks, 0), 0) <= -1.0
+        THEN 'elevated_risk'
+        ELSE 'normal'
+      END AS classification,
+      -- Supply-squeeze flag: both inventory AND utilization stressed simultaneously
+      CASE
+        WHEN COALESCE((c.gasoline_stocks - s.avg_stocks) / NULLIF(s.std_stocks, 0), 0) < -1.0
+          AND COALESCE((c.utilization_pct - s.avg_util) / NULLIF(s.std_util, 0), 0) < -1.5
+        THEN TRUE
+        ELSE FALSE
+      END AS supply_squeeze
     FROM current c
     LEFT JOIN stats_52w s ON c.region = s.region
     ORDER BY c.region

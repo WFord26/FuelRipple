@@ -404,6 +404,7 @@ export default function Dashboard() {
             <DisruptionMeter
               score={disruption.score}
               classification={disruption.classification}
+              direction={disruption.direction}
             />
           )}
         </div>

@@ -173,9 +173,21 @@ router.get('/health', async (req: Request, res: Response, next: NextFunction) =>
         : worst;
     }, 'normal');
 
+    // Surface supply-squeeze alerts (inventory AND utilization both stressed)
+    const squeezeRegions = data
+      .filter((row: any) => row.supply_squeeze === true)
+      .map((row: any) => row.region);
+
     const payload = {
       overall: worstClass,
       regions: data,
+      squeezeAlert: squeezeRegions.length > 0
+        ? {
+          active: true,
+          regions: squeezeRegions,
+          description: 'Inventory z < -1 AND utilization z < -1.5 simultaneously — highest predictor of near-term price increases',
+        }
+        : { active: false, regions: [], description: null },
       meta: {
         classifications: {
           normal:        'Utilization and inventories within seasonal norms',
@@ -183,7 +195,7 @@ router.get('/health', async (req: Request, res: Response, next: NextFunction) =>
           supply_stress: 'Significant unplanned outages; price spike risk elevated',
           critical:      'Major supply disruption; immediate price impact likely',
         },
-        note: 'Leading indicator — typically precedes retail price increases by 1–2 weeks',
+        note: 'Classification uses both utilization AND inventory z-scores. A supply-squeeze alert fires when both are simultaneously stressed.',
       },
     };
 

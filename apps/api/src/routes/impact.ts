@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { FuelCostInputSchema } from '@fuelripple/shared';
 import { calculateFuelCost, calculateTypicalHouseholdImpact, calculateDownstreamImpact } from '@fuelripple/impact-engine';
-import { getCurrentPrices, getIndicators } from '@fuelripple/db';
+import { getCurrentPrices, getHistoricalPrices, getIndicators } from '@fuelripple/db';
 import { cacheOrFetch } from '../services/cache';
 import { CACHE_TTL } from '@fuelripple/shared';
 import { AppError } from '../middleware/errorHandler';
@@ -73,22 +73,62 @@ router.get('/fuel-cost/typical', async (req: Request, res: Response, next: NextF
 router.get('/downstream', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const region = mapRegion((req.query.region as string) || 'US');
-    const baselinePrice = req.query.baseline ? parseFloat(req.query.baseline as string) : undefined;
-    
+    const explicitBaseline = req.query.baseline
+      ? parseFloat(req.query.baseline as string)
+      : undefined;
+
     const impact = await cacheOrFetch(
-      `impact:downstream:${region}:${baselinePrice}`,
+      `impact:downstream:${region}:${explicitBaseline ?? 'rolling'}`,
       async () => {
         // Get current diesel price
         // Diesel data may be stored as 'US' (AAA) or 'NUS' (EIA) — try both
         const prices = await getCurrentPrices('diesel');
         const regionPrice = prices.find((p: any) => p.region === region)
           || (region === 'NUS' ? prices.find((p: any) => p.region === 'US') : null);
-        
+
         if (!regionPrice) {
           throw new AppError('Region not found', 404);
         }
-        
-        return calculateDownstreamImpact(regionPrice.value, baselinePrice);
+
+        // ── Determine baseline ───────────────────────────────────────────
+        let baselinePrice: number;
+        let baselineSource: 'rolling_52w' | 'doe_reference' | 'custom';
+
+        if (explicitBaseline !== undefined) {
+          baselinePrice = explicitBaseline;
+          baselineSource = 'custom';
+        } else {
+          // Default: rolling 52-week-ago diesel price so the impact
+          // reflects the *recent* change, not the accumulated gap vs the
+          // 2000s-era DOE reference ($1.25).
+          const cutoff = new Date();
+          cutoff.setDate(cutoff.getDate() - 370); // ~53 weeks back
+          const cutoffEnd = new Date();
+          cutoffEnd.setDate(cutoffEnd.getDate() - 350); // ~50 weeks back
+
+          const hist = await getHistoricalPrices({
+            metric: 'diesel',
+            region: regionPrice.region, // match whichever region was found
+            start: cutoff,
+            end: cutoffEnd,
+            granularity: 'weekly',
+          });
+
+          if (hist.length > 0) {
+            baselinePrice = hist[0].value; // most recent within window
+            baselineSource = 'rolling_52w';
+          } else {
+            // Fallback to DOE reference if no historical data exists
+            baselinePrice = 1.25; // CONSTANTS.DIESEL_BASELINE
+            baselineSource = 'doe_reference';
+          }
+        }
+
+        return calculateDownstreamImpact(
+          regionPrice.value,
+          baselinePrice,
+          baselineSource
+        );
       },
       CACHE_TTL.DOWNSTREAM
     );

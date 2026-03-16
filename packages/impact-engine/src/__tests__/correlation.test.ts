@@ -118,33 +118,62 @@ describe('estimateGasPriceFromCrude', () => {
 });
 
 describe('analyzeRocketsAndFeathers', () => {
+  // Build test data long enough for cumulative elasticity (4-week window after each shock).
+  // Pattern: crude shock in week 0, then 5 flat weeks, repeat.
+  // This gives the algorithm room to measure cumulative gas response.
+
   it('detects symmetric price movements', () => {
-    // Equal magnitude response to increases and decreases
-    const gasChanges = [0.02, -0.02, 0.01, -0.01, 0.015, -0.015, 0.01, -0.01, 0.02, -0.02, 0.01, -0.01];
-    const oilChanges = [0.05, -0.05, 0.03, -0.03, 0.04,  -0.04,  0.03, -0.03, 0.05, -0.05, 0.03, -0.03];
+    // After each crude move, gas adjusts symmetrically over 4 weeks (same total response)
+    const gasChanges: number[] = [];
+    const oilChanges: number[] = [];
+
+    // Cycle: crude shock, then gas adjusts gradually, then 2 flat weeks
+    for (let cycle = 0; cycle < 6; cycle++) {
+      if (cycle % 2 === 0) {
+        // Crude rises 5%, gas adjusts +1.5% over 4 weeks
+        oilChanges.push(0.05, 0, 0, 0, 0, 0);
+        gasChanges.push(0.006, 0.004, 0.003, 0.002, 0, 0);
+      } else {
+        // Crude falls 5%, gas adjusts -1.5% over 4 weeks (same total magnitude)
+        oilChanges.push(-0.05, 0, 0, 0, 0, 0);
+        gasChanges.push(-0.006, -0.004, -0.003, -0.002, 0, 0);
+      }
+    }
 
     const result = analyzeRocketsAndFeathers(gasChanges, oilChanges);
 
     expect(result.avgIncreaseSpeed).toBeGreaterThan(0);
     expect(result.avgDecreaseSpeed).toBeGreaterThan(0);
-    // Elasticity ratio should be roughly symmetric (~1)
-    expect(result.elasticityRatio).toBeCloseTo(1.0, 0);
-    // Legacy ratio should also be near 1
-    expect(result.asymmetryRatio).toBeCloseTo(1.0, 1);
-    // Both elasticities should be similar
+    // Both elasticities should be similar (symmetric response)
     expect(result.riseElasticity).toBeGreaterThan(0);
     expect(result.fallElasticity).toBeGreaterThan(0);
+    // Speed ratio should be near 1 (symmetric)
+    expect(result.elasticityRatio).toBeCloseTo(1.0, 0);
   });
 
   it('detects rockets and feathers effect', () => {
-    // Gas rises faster when oil goes up, drops slowly when oil goes down
-    const gasChanges = [0.05, -0.01, 0.04, -0.005, 0.03, -0.008, 0.04, -0.01, 0.05, -0.005, 0.03, -0.01];
-    const oilChanges = [0.05, -0.05, 0.03, -0.03,  0.04, -0.04,  0.03, -0.03, 0.05, -0.05,  0.04, -0.04];
+    // Crude rises → gas jumps quickly (large immediate response)
+    // Crude falls → gas drops slowly (small immediate response, delayed adjustment)
+    const gasChanges: number[] = [];
+    const oilChanges: number[] = [];
+
+    for (let cycle = 0; cycle < 6; cycle++) {
+      if (cycle % 2 === 0) {
+        // Crude rises 5%, gas responds strongly: +0.8% + 0.6% + 0.3% + 0.1% = 1.8%
+        oilChanges.push(0.05, 0, 0, 0, 0, 0);
+        gasChanges.push(0.008, 0.006, 0.003, 0.001, 0, 0);
+      } else {
+        // Crude falls 5%, gas responds weakly: -0.2% + -0.2% + -0.2% + -0.2% = 0.8%
+        oilChanges.push(-0.05, 0, 0, 0, 0, 0);
+        gasChanges.push(-0.002, -0.002, -0.002, -0.002, 0, 0);
+      }
+    }
 
     const result = analyzeRocketsAndFeathers(gasChanges, oilChanges);
 
-    expect(result.elasticityRatio).toBeGreaterThan(1);
+    // Rise elasticity should be higher (gas responds more per crude increase)
     expect(result.riseElasticity).toBeGreaterThan(result.fallElasticity);
+    expect(result.elasticityRatio).toBeGreaterThan(1);
     expect(result.avgIncreaseSpeed).toBeGreaterThan(result.avgDecreaseSpeed);
   });
 
@@ -158,6 +187,32 @@ describe('analyzeRocketsAndFeathers', () => {
     expect(result.cumulativePassThrough).toHaveLength(5); // lags 0 through 4
     expect(result.cumulativePassThrough[0].lag).toBe(0);
     expect(result.cumulativePassThrough[4].lag).toBe(4);
+  });
+
+  it('cumulative pass-through shows rises completing faster', () => {
+    const gasChanges: number[] = [];
+    const oilChanges: number[] = [];
+
+    for (let cycle = 0; cycle < 4; cycle++) {
+      if (cycle % 2 === 0) {
+        // Rise: most adjustment in week 0 (front-loaded = rocket)
+        oilChanges.push(0.06, 0, 0, 0, 0, 0, 0);
+        gasChanges.push(0.015, 0.003, 0.001, 0.001, 0, 0, 0);
+      } else {
+        // Fall: adjustment spread evenly (back-loaded = feather)
+        oilChanges.push(-0.06, 0, 0, 0, 0, 0, 0);
+        gasChanges.push(-0.003, -0.004, -0.005, -0.005, -0.003, 0, 0);
+      }
+    }
+
+    const result = analyzeRocketsAndFeathers(gasChanges, oilChanges);
+
+    // At week 0, rises should have a higher fraction passed through
+    expect(result.cumulativePassThrough[0].risePct).toBeGreaterThan(
+      result.cumulativePassThrough[0].fallPct
+    );
+    // Rise half-life should be shorter (faster)
+    expect(result.riseHalfLifeWeeks).toBeLessThanOrEqual(result.fallHalfLifeWeeks);
   });
 
   it('returns half-life metrics', () => {

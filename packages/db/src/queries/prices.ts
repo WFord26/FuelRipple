@@ -4,7 +4,9 @@ import { EnergyPrice } from '@fuelripple/shared';
 
 /**
  * Insert energy prices with deduplication.
- * Chunks rows to stay under PostgreSQL's 65535-parameter bind limit.
+ * Sorts by time then chunks into small batches so each batch touches
+ * few TimescaleDB hypertable partitions, staying within Azure PG's
+ * max_locks_per_transaction limit.
  */
 export async function insertPrices(prices: EnergyPrice[]): Promise<void> {
   if (prices.length === 0) {
@@ -13,10 +15,15 @@ export async function insertPrices(prices: EnergyPrice[]): Promise<void> {
   }
   
   const knex = getKnex();
-  const CHUNK = 1000; // 1000 rows × ~6 cols = 6000 params per batch
+  // Sort by time so consecutive rows land in the same hypertable chunk,
+  // minimising predicate-lock count per batch.
+  const sorted = [...prices].sort(
+    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+  );
+  const CHUNK = 50; // 50 rows × 6 cols = 300 params — small enough for Azure PG lock limits with TimescaleDB
 
-  for (let i = 0; i < prices.length; i += CHUNK) {
-    const chunk = prices.slice(i, i + CHUNK);
+  for (let i = 0; i < sorted.length; i += CHUNK) {
+    const chunk = sorted.slice(i, i + CHUNK);
     await knex('energy_prices')
       .insert(chunk)
       .onConflict(['time', 'source', 'metric', 'region'])
@@ -27,15 +34,30 @@ export async function insertPrices(prices: EnergyPrice[]): Promise<void> {
 /**
  * Refresh the pre-computed aggregate materialized views after new price data
  * is loaded.  Called by the BullMQ workers after each successful insertPrices.
- * Uses a plain (non-concurrent) refresh — safe because each view is tiny relative
- * to energy_prices and refresh runs at most once per ingestion job.
+ * Uses CONCURRENTLY to reduce lock pressure on TimescaleDB hypertables.
+ * Refreshes each view independently so one failure doesn't block the rest.
  */
 export async function refreshMaterializedViews(): Promise<void> {
   const knex = getKnex();
   for (const view of ['daily_prices', 'weekly_prices', 'monthly_prices']) {
-    await knex.raw(`REFRESH MATERIALIZED VIEW ${view};`);
+    try {
+      await knex.raw(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view};`);
+      console.log(`  ✅ ${view} refreshed`);
+    } catch (err: any) {
+      // CONCURRENTLY requires a unique index; fall back to non-concurrent
+      if (err.message?.includes('CONCURRENTLY') || err.code === '55000') {
+        try {
+          await knex.raw(`REFRESH MATERIALIZED VIEW ${view};`);
+          console.log(`  ✅ ${view} refreshed (non-concurrent fallback)`);
+        } catch (err2: any) {
+          console.warn(`  ⚠️  ${view} refresh failed: ${err2.message ?? err2}`);
+        }
+      } else {
+        console.warn(`  ⚠️  ${view} refresh failed: ${err.message ?? err}`);
+      }
+    }
   }
-  console.log('✅ Materialized views refreshed (daily, weekly, monthly)');
+  console.log('Materialized view refresh complete');
 }
 
 /**
@@ -108,7 +130,12 @@ export async function getPriceStats(
 }
 
 /**
- * Calculate week-over-week price changes
+ * Calculate week-over-week price changes.
+ *
+ * Uses a source-preference strategy to avoid mixing EIA weekly data with
+ * AAA daily scrapes inside the same time bucket (which produces artificial
+ * jumps). For each week we take the EIA value if available, otherwise AAA,
+ * otherwise any source.
  */
 export async function getWeeklyChanges(
   metric: string,
@@ -116,23 +143,40 @@ export async function getWeeklyChanges(
   weeks: number = 52
 ): Promise<any[]> {
   const knex = getKnex();
-  
+
   return knex.raw(`
-    WITH weekly_data AS (
+    WITH ranked AS (
       SELECT
-        time_bucket('7 days', time) as week,
-        AVG(value) as avg_price
+        time_bucket('7 days', time)     AS week,
+        value,
+        source,
+        -- Prefer EIA > AAA > everything else within the same week
+        ROW_NUMBER() OVER (
+          PARTITION BY time_bucket('7 days', time)
+          ORDER BY
+            CASE source
+              WHEN 'eia'  THEN 1
+              WHEN 'aaa'  THEN 2
+              ELSE             3
+            END,
+            time DESC
+        ) AS rn
       FROM energy_prices
       WHERE metric = ? AND region = ?
-      GROUP BY week
-      ORDER BY week DESC
-      LIMIT ?
+    ),
+    weekly_data AS (
+      SELECT week, value AS avg_price
+      FROM   ranked
+      WHERE  rn = 1
+      ORDER  BY week DESC
+      LIMIT  ?
     )
     SELECT
       week,
       avg_price,
       LAG(avg_price) OVER (ORDER BY week) as prev_price,
-      (avg_price - LAG(avg_price) OVER (ORDER BY week)) / LAG(avg_price) OVER (ORDER BY week) as pct_change
+      (avg_price - LAG(avg_price) OVER (ORDER BY week))
+        / NULLIF(LAG(avg_price) OVER (ORDER BY week), 0) as pct_change
     FROM weekly_data
     ORDER BY week DESC
   `, [metric, region, weeks]).then(result => result.rows);

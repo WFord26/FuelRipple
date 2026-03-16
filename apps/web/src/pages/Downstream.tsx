@@ -19,9 +19,10 @@ import { getDownstreamImpact, getEconomicIndicators } from '../api/client';
 
 // ── Type helpers ──────────────────────────────────────────────────────────────
 interface DownstreamData {
-  diesel:   { current: number; baseline: number; increase: number };
+  diesel:   { current: number; baseline: number; increase: number; baselineSource?: string };
   freight:  { surchargePerMile: number; costPerMileIncrease: number; rateIncreasePercent: number };
   consumer: { minCPIIncrease: number; maxCPIIncrease: number; avgCPIIncrease: number; foodPriceIncrease: number };
+  lag?: { freightSurcharge: { label: string }; consumerGoods: { label: string }; foodPrices: { label: string } };
 }
 
 // ── Sankey helpers ────────────────────────────────────────────────────────────
@@ -29,10 +30,10 @@ const NODE_COLORS = [
   '#3b82f6', // 0 Diesel – blue
   '#f59e0b', // 1 Trucking – amber
   '#eab308', // 2 Freight Rate – yellow
-  '#ef4444', // 3 Consumer Goods – red
-  '#f97316', // 4 Food Prices – orange
+  '#ef4444', // 3 Consumer CPI (total) – red
+  '#f97316', // 4 Food & Grocery (subset of CPI) – orange
   '#64748b', // 5 Absorbed by Carriers – slate
-  '#475569', // 6 Absorbed by Retailers – slate
+  '#475569', // 6 Non-Food Goods (subset of CPI) – slate
 ];
 
 function computeSankeyData(downstream: DownstreamData | undefined) {
@@ -45,28 +46,31 @@ function computeSankeyData(downstream: DownstreamData | undefined) {
   const freightValue       = Math.min(Math.round(downstream.freight.rateIncreasePercent * 10), 950);
   const carrierAbsorption  = Math.max(total - freightValue, 50);
 
-  // Consumer impact out of freightValue budget
-  const cpiValue           = Math.max(Math.round(downstream.consumer.avgCPIIncrease * 100), 1);
-  const foodValue          = Math.max(Math.round(downstream.consumer.foodPriceIncrease * 100), 1);
-  const retailerAbsorption = Math.max(freightValue - cpiValue - foodValue, 1);
+  // Consumer impact: food is a *subset* of total CPI, not additive.
+  const totalCpiValue = Math.max(Math.round(downstream.consumer.avgCPIIncrease * 100), 2);
+  const foodValue     = Math.max(Math.round(downstream.consumer.foodPriceIncrease * 100), 1);
+  // Non-food is the remainder of total CPI after the food component
+  const nonFoodValue  = Math.max(totalCpiValue - Math.min(foodValue, totalCpiValue - 1), 1);
+  const retailerAbsorption = Math.max(freightValue - totalCpiValue, 1);
 
   return {
     nodes: [
       { name: `Diesel ↑$${dieselIncrease.toFixed(2)}/gal` },
       { name: 'Trucking Costs' },
       { name: 'Freight Surcharges' },
-      { name: `Consumer Goods +${downstream.consumer.avgCPIIncrease.toFixed(2)}%` },
+      { name: `Consumer CPI +${downstream.consumer.avgCPIIncrease.toFixed(2)}%` },
       { name: `Food & Grocery +${downstream.consumer.foodPriceIncrease.toFixed(2)}%` },
       { name: 'Absorbed – Carriers' },
-      { name: 'Absorbed – Retailers' },
+      { name: `Non-Food Goods` },
     ],
     links: [
       { source: 0, target: 1, value: total },
       { source: 1, target: 2, value: freightValue },
       { source: 1, target: 5, value: carrierAbsorption },
-      { source: 2, target: 3, value: cpiValue },
-      { source: 2, target: 4, value: Math.max(foodValue, 1) },
-      { source: 2, target: 6, value: Math.max(retailerAbsorption, 1) },
+      { source: 2, target: 3, value: totalCpiValue },                          // Freight → Total CPI
+      { source: 2, target: 5, value: Math.max(retailerAbsorption, 1) },        // Freight → Absorbed
+      { source: 3, target: 4, value: Math.min(foodValue, totalCpiValue - 1) }, // CPI → Food subset
+      { source: 3, target: 6, value: nonFoodValue },                           // CPI → Non-food subset
     ],
   };
 }
@@ -264,25 +268,25 @@ export default function Downstream() {
             color="blue"
             label="Diesel Price"
             value={`$${downstream.diesel.current.toFixed(3)}/gal`}
-            sub={`$${downstream.diesel.increase >= 0 ? '+' : ''}${downstream.diesel.increase.toFixed(3)} vs DOE baseline`}
+            sub={`$${downstream.diesel.increase >= 0 ? '+' : ''}${downstream.diesel.increase.toFixed(3)} vs ${downstream.diesel.baselineSource === 'rolling_52w' ? '52-week ago' : downstream.diesel.baselineSource === 'custom' ? 'custom baseline' : 'DOE baseline'}`}
           />
           <MetricCard
             color="amber"
             label="Freight Surcharge"
             value={`$${downstream.freight.surchargePerMile.toFixed(3)}/mi`}
-            sub={`+${downstream.freight.rateIncreasePercent.toFixed(1)}% freight rate increase`}
+            sub={`+${downstream.freight.rateIncreasePercent.toFixed(1)}% freight rate | lag: ${downstream.lag?.freightSurcharge?.label ?? '1-2 weeks'}`}
           />
           <MetricCard
             color="red"
-            label="Consumer Goods CPI"
+            label="Consumer CPI Impact"
             value={`+${downstream.consumer.avgCPIIncrease.toFixed(2)}%`}
-            sub={`Range: ${downstream.consumer.minCPIIncrease.toFixed(2)}% – ${downstream.consumer.maxCPIIncrease.toFixed(2)}%`}
+            sub={`Range: ${downstream.consumer.minCPIIncrease.toFixed(2)}%–${downstream.consumer.maxCPIIncrease.toFixed(2)}% | lag: ${downstream.lag?.consumerGoods?.label ?? '2-6 months'}`}
           />
           <MetricCard
             color="orange"
             label="Food Price Impact"
             value={`+${downstream.consumer.foodPriceIncrease.toFixed(2)}%`}
-            sub="~9% of food cost is transport (USDA)"
+            sub={`9% of food cost is transport (USDA) | lag: ${downstream.lag?.foodPrices?.label ?? '1-3 months'}`}
           />
         </div>
       ) : null}

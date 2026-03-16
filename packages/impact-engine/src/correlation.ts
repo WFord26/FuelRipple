@@ -85,9 +85,11 @@ export function estimateGasPriceFromCrude(crudeChange: number): number {
  *
  * Two dimensions of asymmetry are measured:
  *
- * 1. **Elasticity asymmetry** — When crude rises, how much does gas move per
- *    1% of crude change vs when crude falls? A ratio > 1 means gas is more
- *    responsive to crude increases ("rockets up").
+ * 1. **Elasticity asymmetry** — After a crude price shock, what is the total
+ *    cumulative gas response over a 4-week window, per 1% of crude change?
+ *    Measured separately for crude increases vs decreases. Gas typically lags
+ *    crude by 1–3 weeks, so same-week comparisons are meaningless; the
+ *    cumulative window captures the full pass-through.
  *
  * 2. **Cumulative pass-through** — After a crude price shock, how much of the
  *    change has been reflected at the pump after 1, 2, 3, 4 weeks? If crude
@@ -125,24 +127,14 @@ export function analyzeRocketsAndFeathers(
   let increaseSpeeds: number[] = [];
   let decreaseSpeeds: number[] = [];
 
-  // ── 2. Elasticity: gasΔ% / oilΔ% for up vs down weeks ──
-  let riseElasticities: number[] = [];
-  let fallElasticities: number[] = [];
-
   for (let i = 0; i < n; i++) {
     const oilChange = oilPriceChanges[i];
     const gasChange = gasPriceChanges[i];
 
     if (oilChange > 0.001) {
-      // Crude rose — gas should rise; record magnitude AND elasticity
       increaseSpeeds.push(Math.abs(gasChange));
-      riseElasticities.push(gasChange / oilChange);
     } else if (oilChange < -0.001) {
-      // Crude fell — gas should fall; record magnitude AND elasticity
       decreaseSpeeds.push(Math.abs(gasChange));
-      // For a negative oil change, gasChange should be negative too.
-      // Elasticity = gasΔ / oilΔ — both negative ⇒ positive ratio.
-      fallElasticities.push(gasChange / oilChange);
     }
   }
 
@@ -153,11 +145,7 @@ export function analyzeRocketsAndFeathers(
   const avgDecreaseSpeed = avg(decreaseSpeeds);
   const asymmetryRatio = avgDecreaseSpeed > 0 ? avgIncreaseSpeed / avgDecreaseSpeed : 0;
 
-  const riseElasticity = avg(riseElasticities);
-  const fallElasticity = avg(fallElasticities);
-  const elasticityRatio = fallElasticity > 0 ? riseElasticity / fallElasticity : 0;
-
-  // ── 3. Cumulative pass-through at multiple lags ──
+  // ── 2. Cumulative pass-through at multiple lags ──
   // For each significant crude shock, measure the cumulative gas response
   // over the next 0–4 weeks and normalize by the total gas adjustment that
   // ultimately occurs (window = 6 weeks).
@@ -203,7 +191,7 @@ export function analyzeRocketsAndFeathers(
     fallPct: avg(fallCumFractions[lag]) * 100,
   }));
 
-  // ── 4. Half-life: weeks until 50% pass-through ──
+  // ── 3. Half-life: weeks until 50% pass-through ──
   const halfLife = (cumPcts: { lag: number; pct: number }[]): number => {
     for (const { lag, pct } of cumPcts) {
       if (pct >= 50) return lag;
@@ -217,6 +205,16 @@ export function analyzeRocketsAndFeathers(
   const fallHalfLifeWeeks = halfLife(
     cumulativePassThrough.map((c) => ({ lag: c.lag, pct: c.fallPct }))
   );
+
+  // ── 4. Pass-through speed ratio (derived from cumulative data) ──
+  // Average cumulative % across all lags for rises vs falls.
+  // A ratio > 1 means rises pass through faster at every stage — the
+  // "rockets" side of the asymmetry.
+  const avgRisePct = avg(cumulativePassThrough.map((c) => c.risePct));
+  const avgFallPct = avg(cumulativePassThrough.map((c) => c.fallPct));
+  const riseElasticity = avgRisePct;
+  const fallElasticity = avgFallPct;
+  const elasticityRatio = avgFallPct > 0 ? avgRisePct / avgFallPct : 0;
 
   return {
     avgIncreaseSpeed,

@@ -26,6 +26,10 @@ COPY apps/web/ apps/web/
 ARG VITE_API_URL=https://api.fuelripple.com/api/v1
 ENV VITE_API_URL=${VITE_API_URL}
 
+# Accept Application Insights connection string at build time
+ARG VITE_APPINSIGHTS_CONNECTION_STRING=
+ENV VITE_APPINSIGHTS_CONNECTION_STRING=${VITE_APPINSIGHTS_CONNECTION_STRING}
+
 # Build shared package + web app via Turborepo
 RUN npx turbo run build --filter=@fuelripple/web...
 

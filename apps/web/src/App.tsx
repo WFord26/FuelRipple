@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
+import { usePageTracking } from './hooks/useAnalytics';
 
 // ── Lazy-load all page bundles (code-splitting per route) ────────────────────
 const Dashboard  = lazy(() => import('./pages/Dashboard'));
@@ -33,6 +34,8 @@ function PageSkeleton() {
 }
 
 function App() {
+  usePageTracking();
+
   return (
     <ErrorBoundary section="Application">
       <Routes>

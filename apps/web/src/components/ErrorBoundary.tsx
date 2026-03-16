@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { trackException } from '../lib/appInsights';
 
 interface Props {
   children: ReactNode;
@@ -25,6 +26,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error(`[ErrorBoundary:${this.props.section ?? 'app'}]`, error, info.componentStack);
+    trackException(error, {
+      section: this.props.section ?? 'app',
+      componentStack: info.componentStack ?? '',
+    });
   }
 
   private reset = () => this.setState({ hasError: false, error: null });

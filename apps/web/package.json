@@ -1,6 +1,6 @@
 {
   "name": "@fuelripple/web",
-  "version": "1.0.5",
+  "version": "1.0.6-beta.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,6 +17,8 @@
     "@elastic/charts": "^71.3.0",
     "@fuelripple/shared": "*",
     "@hookform/resolvers": "^3.6.0",
+    "@microsoft/applicationinsights-react-js": "^19.3.8",
+    "@microsoft/applicationinsights-web": "^3.3.11",
     "@tanstack/react-query": "^5.45.0",
     "@types/d3-scale-chromatic": "^3.1.0",
     "@types/topojson-client": "^3.1.5",

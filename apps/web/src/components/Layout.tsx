@@ -9,6 +9,8 @@ const navigation = [
   { name: 'Impact',       path: '/impact' },
   { name: 'Correlation',  path: '/correlation' },
   { name: 'Downstream',   path: '/downstream' },
+  { name: 'State Prices', path: '/state-prices' },
+  { name: 'Data Status',  path: '/data-status' },
 ];
 
 export default function Layout() {

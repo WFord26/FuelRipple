@@ -547,13 +547,13 @@ export async function fetchRefineryCapacity820(
 }
 
 /**
- * Fetch diesel retail prices
+ * Fetch diesel retail prices for all regions (states + PADDs + national)
  */
 export async function fetchDieselPrices(startDate?: string, endDate?: string): Promise<{
   series: string;
   region: string;
   data: EIADataPoint[];
-}> {
+}[]> {
   if (!API_KEY) {
     throw new Error('EIA API key not configured');
   }
@@ -564,30 +564,57 @@ export async function fetchDieselPrices(startDate?: string, endDate?: string): P
       frequency: 'weekly',
       'data[0]': 'value',
       'facets[product][]': 'EPD2D', // No. 2 Diesel Retail Prices
-      'facets[duoarea][]': 'NUS', // National US
       sort: [{ column: 'period', direction: 'desc' }],
-      offset: 0,
-      length: 500,
     };
 
     if (startDate) params.start = startDate;
     if (endDate) params.end = endDate;
 
-    const response = await axios.get(`${EIA_BASE_URL}/petroleum/pri/gnd/data/`, {
-      params,
-    });
+    // Paginate until all records are fetched (same approach as fetchAllGasPrices)
+    const allApiData: any[] = [];
+    let offset = 0;
+    const pageSize = 5000;
 
-    const apiData = response.data?.response?.data || [];
-    console.log(`Fetched ${apiData.length} diesel price points`);
+    while (true) {
+      const response = await axios.get(`${EIA_BASE_URL}/petroleum/pri/gnd/data/`, {
+        params: { ...params, offset, length: pageSize },
+      });
 
-    return {
-      series: 'diesel-retail-us',
-      region: 'US',
-      data: apiData.map((item: any) => ({
+      const page = response.data?.response?.data || [];
+      allApiData.push(...page);
+      console.log(`EIA diesel page offset=${offset}: ${page.length} records (total so far: ${allApiData.length})`);
+
+      if (page.length < pageSize) break; // last page
+      offset += pageSize;
+    }
+
+    console.log(`EIA diesel API returned ${allApiData.length} total data points`);
+
+    // Group by region (PADD-level R**, state-level S**, and national NUS/US)
+    const regionMap = new Map<string, EIADataPoint[]>();
+
+    for (const item of allApiData) {
+      const region = item.duoarea || item.area || 'US';
+      if (!regionMap.has(region)) {
+        regionMap.set(region, []);
+      }
+      regionMap.get(region)!.push({
         period: item.period,
         value: parseFloat(item.value),
-      })),
-    };
+      });
+    }
+
+    const results: { series: string; region: string; data: EIADataPoint[] }[] = [];
+    for (const [region, data] of regionMap.entries()) {
+      results.push({
+        series: `diesel-retail-${region}`,
+        region,
+        data,
+      });
+    }
+
+    console.log(`Processed diesel into ${results.length} regional datasets`);
+    return results;
   } catch (error) {
     if (axios.isAxiosError(error)) {
       console.error('EIA API error fetching diesel:', error.response?.data || error.message);

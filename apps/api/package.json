@@ -1,6 +1,6 @@
 {
   "name": "@fuelripple/api",
-  "version": "1.0.2",
+  "version": "1.0.3-beta.0",
   "private": true,
   "main": "./dist/index.js",
   "scripts": {
@@ -13,7 +13,9 @@
     "clean": "rm -rf dist",
     "lint": "eslint src/",
     "backfill": "tsx --env-file=../../.env src/scripts/backfill.ts",
-    "download-crude": "tsx --env-file=../../.env src/scripts/download-crude.ts"
+    "download-crude": "tsx --env-file=../../.env src/scripts/download-crude.ts",
+    "scrape-aaa": "tsx src/scripts/scrape-aaa-history.ts",
+    "import-aaa": "tsx --env-file=../../.env src/scripts/import-aaa-csv.ts"
   },
   "dependencies": {
     "@fuelripple/db": "*",

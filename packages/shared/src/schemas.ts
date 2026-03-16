@@ -3,7 +3,7 @@ import { z } from 'zod';
 // Energy Price Schema
 export const EnergyPriceSchema = z.object({
   time: z.date(),
-  source: z.enum(['eia', 'fred', 'oilprice', 'aaa', 'yahoo']),
+  source: z.enum(['eia', 'fred', 'oilprice', 'aaa', 'yahoo', 'estimated']),
   metric: z.enum(['gas_regular', 'gas_midgrade', 'gas_premium', 'diesel', 'crude_wti', 'crude_brent']),
   region: z.string().default('US'),
   value: z.number(),

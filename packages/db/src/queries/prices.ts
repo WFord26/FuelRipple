@@ -139,6 +139,62 @@ export async function getWeeklyChanges(
 }
 
 /**
+ * Get the latest daily price for every state across all fuel metrics.
+ * Returns one row per state with regular, midgrade, premium, and diesel prices.
+ */
+export async function getAllStatePrices(): Promise<any[]> {
+  const knex = getKnex();
+
+  return knex.raw(`
+    WITH latest AS (
+      SELECT DISTINCT ON (metric, region)
+        metric, region, value, time
+      FROM energy_prices
+      WHERE metric IN ('gas_regular', 'gas_midgrade', 'gas_premium', 'diesel')
+        AND region ~ '^S[A-Z]{2}$'
+      ORDER BY metric, region, time DESC
+    )
+    SELECT
+      region,
+      MAX(CASE WHEN metric = 'gas_regular'  THEN value END) AS regular,
+      MAX(CASE WHEN metric = 'gas_midgrade' THEN value END) AS mid_grade,
+      MAX(CASE WHEN metric = 'gas_premium'  THEN value END) AS premium,
+      MAX(CASE WHEN metric = 'diesel'       THEN value END) AS diesel,
+      MAX(time) AS time
+    FROM latest
+    GROUP BY region
+    ORDER BY region
+  `).then((r: any) => r.rows);
+}
+
+/**
+ * Get data freshness information — latest timestamp per source × metric × region class.
+ * Region class is one of: national (NUS/US), PADD (R**), or state (S**).
+ */
+export async function getDataStatus(): Promise<any[]> {
+  const knex = getKnex();
+
+  return knex.raw(`
+    SELECT
+      source,
+      metric,
+      CASE
+        WHEN region IN ('US', 'NUS') THEN 'National'
+        WHEN region ~ '^R[0-9]+$'    THEN 'PADD'
+        WHEN region ~ '^S[A-Z]{2}$'  THEN 'State'
+        ELSE 'Other'
+      END AS region_class,
+      COUNT(DISTINCT region) AS region_count,
+      MAX(time)              AS latest_time,
+      MIN(time)              AS earliest_time,
+      COUNT(*)               AS total_rows
+    FROM energy_prices
+    GROUP BY source, metric, region_class
+    ORDER BY source, metric, region_class
+  `).then((r: any) => r.rows);
+}
+
+/**
  * Get price changes vs 1 week, 1 month, and 1 year ago for a metric/region
  */
 export async function getPriceChanges(metric: string, region: string): Promise<any> {
@@ -272,6 +328,72 @@ export async function getCorrelationSeries(options: {
     LIMIT  ?
   `, [gasRegion, start, end, start, end, weeks])
     .then((r: any) => r.rows);
+}
+
+/**
+ * Get a seasonal comparison: current price vs the average price for the same
+ * ISO week across the prior `years` years.  For example, if today is week 11
+ * of 2026 and years = 5, the baseline is the average of week-11 prices from
+ * 2021–2025.  Returns current price, seasonal average, delta, and percent
+ * above/below seasonal norm.
+ */
+export async function getSeasonalComparison(
+  metric: string,
+  region: string,
+  years: number = 5,
+): Promise<{
+  currentPrice: number;
+  seasonalAvg: number;
+  delta: number;
+  deltaPct: number;
+  isoWeek: number;
+  yearsIncluded: number;
+} | null> {
+  const knex = getKnex();
+
+  const result = await knex.raw(`
+    WITH current_price AS (
+      SELECT value, time, EXTRACT(WEEK FROM time)::int AS iso_week
+      FROM energy_prices
+      WHERE metric = ? AND region = ?
+      ORDER BY time DESC
+      LIMIT 1
+    ),
+    seasonal AS (
+      SELECT
+        AVG(ep.value) AS avg_price,
+        COUNT(DISTINCT EXTRACT(YEAR FROM ep.time))::int AS years_included
+      FROM energy_prices ep, current_price cp
+      WHERE ep.metric = ?
+        AND ep.region = ?
+        AND EXTRACT(WEEK FROM ep.time) = cp.iso_week
+        AND ep.time < DATE_TRUNC('year', cp.time)
+        AND ep.time >= DATE_TRUNC('year', cp.time) - INTERVAL '1 year' * ?
+    )
+    SELECT
+      cp.value       AS current_price,
+      cp.iso_week,
+      s.avg_price    AS seasonal_avg,
+      s.years_included
+    FROM current_price cp, seasonal s
+  `, [metric, region, metric, region, years]);
+
+  const row = result.rows[0];
+  if (!row || row.current_price == null || row.seasonal_avg == null) return null;
+
+  const current = parseFloat(row.current_price);
+  const avg = parseFloat(row.seasonal_avg);
+  const delta = current - avg;
+  const deltaPct = avg > 0 ? (delta / avg) * 100 : 0;
+
+  return {
+    currentPrice: current,
+    seasonalAvg: avg,
+    delta,
+    deltaPct,
+    isoWeek: row.iso_week,
+    yearsIncluded: row.years_included,
+  };
 }
 
 /**

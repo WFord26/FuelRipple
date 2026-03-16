@@ -56,16 +56,19 @@ import {
   insertPrices,
   insertIndicators,
   upsertRefineryData,
+  refreshMaterializedViews,
   closeConnection,
+  getKnex,
 } from '@fuelripple/db';
 
 import type { RefineryOperationsRow } from '@fuelripple/db';
 import { EnergyPrice, EconomicIndicator } from '@fuelripple/shared';
+import { STATE_INFO } from '../utils/regionMapper';
 
 // ─── CLI argument parsing ─────────────────────────────────────────────────────
 
-type Source = 'gas' | 'crude' | 'diesel' | 'economic' | 'refinery';
-const ALL_SOURCES: Source[] = ['gas', 'crude', 'diesel', 'economic', 'refinery'];
+type Source = 'gas' | 'crude' | 'diesel' | 'economic' | 'refinery' | 'states';
+const ALL_SOURCES: Source[] = ['gas', 'crude', 'diesel', 'economic', 'refinery', 'states'];
 
 interface BackfillOptions {
   start: string;
@@ -234,20 +237,26 @@ async function backfillCrudePrices(start: string, end: string, dryRun: boolean):
 }
 
 async function backfillDieselPrices(start: string, end: string, dryRun: boolean): Promise<void> {
-  separator('EIA  ▸  Diesel Retail Prices (US National)');
+  separator('EIA  ▸  Diesel Retail Prices (All Regions)');
   log(`Date range: ${start} → ${end}`);
 
-  const { data } = await fetchDieselPrices(start, end);
-  const prices: EnergyPrice[] = data
-    .filter(p => !isNaN(p.value))
-    .map(point => ({
-      time: new Date(point.period),
-      source: 'eia',
-      metric: 'diesel',
-      region: 'US',
-      value: point.value,
-      unit: 'usd_per_gallon',
-    }));
+  const results = await fetchDieselPrices(start, end);
+  log(`Received ${results.length} regional diesel datasets from EIA`);
+
+  const prices: EnergyPrice[] = [];
+  for (const { region, data } of results) {
+    for (const point of data) {
+      if (isNaN(point.value)) continue;
+      prices.push({
+        time: new Date(point.period),
+        source: 'eia',
+        metric: 'diesel',
+        region,
+        value: point.value,
+        unit: 'usd_per_gallon',
+      });
+    }
+  }
 
   log(`Prepared ${prices.length} diesel price records`);
   if (!dryRun) {
@@ -371,6 +380,111 @@ async function backfillRefineryData(start: string, end: string, dryRun: boolean)
   }
 }
 
+/**
+ * Generate synthetic state-level historical prices from PADD data.
+ *
+ * For states that lack EIA history (most of the 50), this:
+ *  1. Gets the most recent AAA state price and EIA PADD price
+ *  2. Computes a ratio: statePrice / paddPrice
+ *  3. Applies that ratio to all historical PADD data points
+ *  4. Inserts with source='estimated' so it's distinguishable from real data
+ *
+ * Covers both gas_regular and diesel.
+ */
+async function backfillStateEstimates(dryRun: boolean): Promise<void> {
+  separator('Synthetic  ▸  State-Level Estimates from PADD History');
+  const knex = getKnex();
+
+  const metrics: EnergyPrice['metric'][] = ['gas_regular', 'diesel'];
+  let totalInserted = 0;
+
+  for (const metric of metrics) {
+    log(`Processing ${metric}...`);
+
+    // 1. Find states that already have substantial EIA/estimated history (>10 records)
+    const existing = await knex('energy_prices')
+      .select('region')
+      .count('* as cnt')
+      .where({ metric })
+      .whereIn('source', ['eia', 'estimated'])
+      .whereRaw("region LIKE 'S%' AND LENGTH(region) = 3")
+      .groupBy('region')
+      .having(knex.raw('COUNT(*) > 10'));
+    const hasHistory = new Set(existing.map((r: any) => r.region));
+
+    // 2. Get the most recent AAA price per state
+    const aaaPrices = await knex('energy_prices')
+      .select('region', 'value')
+      .where({ metric, source: 'aaa' })
+      .whereRaw("region LIKE 'S%' AND LENGTH(region) = 3")
+      .orderBy('time', 'desc');
+    // Deduplicate to most recent per region
+    const latestAAA = new Map<string, number>();
+    for (const row of aaaPrices) {
+      if (!latestAAA.has(row.region)) latestAAA.set(row.region, row.value);
+    }
+
+    // 3. Get the most recent EIA PADD price per PADD
+    const paddPrices = await knex('energy_prices')
+      .select('region', 'value')
+      .where({ metric, source: 'eia' })
+      .whereIn('region', ['R10', 'R20', 'R30', 'R40', 'R50'])
+      .orderBy('time', 'desc');
+    const latestPADD = new Map<string, number>();
+    for (const row of paddPrices) {
+      if (!latestPADD.has(row.region)) latestPADD.set(row.region, row.value);
+    }
+
+    // 4. For each state without history, compute ratio and generate estimates
+    let metricInserted = 0;
+    for (const [duoarea, info] of Object.entries(STATE_INFO)) {
+      if (hasHistory.has(duoarea)) {
+        continue; // already has EIA history
+      }
+
+      const statePrice = latestAAA.get(duoarea);
+      const paddPrice = latestPADD.get(info.padd);
+      if (!statePrice || !paddPrice || paddPrice === 0) {
+        log(`  ⚠️  Skipping ${duoarea} (${info.abbr}): no AAA or PADD price for ratio`);
+        continue;
+      }
+
+      const ratio = statePrice / paddPrice;
+
+      // Get full PADD history from EIA
+      const paddHistory: { time: Date; value: number }[] = await knex('energy_prices')
+        .select('time', 'value')
+        .where({ metric, source: 'eia', region: info.padd })
+        .orderBy('time', 'desc');
+
+      if (paddHistory.length === 0) {
+        log(`  ⚠️  Skipping ${duoarea}: no PADD ${info.padd} history`);
+        continue;
+      }
+
+      const prices: EnergyPrice[] = paddHistory.map(row => ({
+        time: row.time,
+        source: 'estimated' as const,
+        metric,
+        region: duoarea,
+        value: Math.round(row.value * ratio * 1000) / 1000, // 3 decimal places
+        unit: 'usd_per_gallon',
+      }));
+
+      if (!dryRun) {
+        await insertPrices(prices);
+      }
+      metricInserted += prices.length;
+      log(`  ${info.abbr} (${duoarea}): ${prices.length} estimated points (ratio=${ratio.toFixed(3)})`);
+    }
+
+    log(`${metric}: generated ${metricInserted} estimated records`);
+    totalInserted += metricInserted;
+  }
+
+  log(`Total: ${totalInserted} estimated state records${dryRun ? ' (dry-run, not inserted)' : ''}`);
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -431,7 +545,16 @@ async function main(): Promise<void> {
       case 'refinery':
         await run(source, () => backfillRefineryData(opts.start, opts.end, opts.dryRun));
         break;
+      case 'states':
+        await run(source, () => backfillStateEstimates(opts.dryRun));
+        break;
     }
+  }
+
+  // Refresh materialized views so history queries see the new data
+  if (!opts.dryRun && results.some(r => r.status === 'ok')) {
+    log('Refreshing materialized views (daily, weekly, monthly)...');
+    await refreshMaterializedViews();
   }
 
   // Summary

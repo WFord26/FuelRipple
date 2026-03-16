@@ -29,9 +29,22 @@ app.set('trust proxy', 1);
 // Security middleware
 app.use(helmet());
 
-// CORS
+// CORS — support comma-separated origins in CORS_ORIGIN env var
+const allowedOrigins = (
+  process.env.CORS_ORIGIN || 'http://localhost:5173'
+)
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin(origin, callback) {
+    // Allow requests with no Origin header (health checks, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    console.warn(`⚠️  CORS blocked origin: ${origin}  (allowed: ${allowedOrigins.join(', ')})`);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 }));
 
@@ -50,7 +63,13 @@ app.use(express.urlencoded({ extended: true }));
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    cors: allowedOrigins,
+    database: !!process.env.DATABASE_URL,
+    redis: !!process.env.REDIS_URL,
+  });
 });
 
 // API routes
@@ -77,6 +96,9 @@ if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
     console.log(`🚀 FuelRipple API server running on port ${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🌐 CORS origins: ${allowedOrigins.join(', ')}`);
+    console.log(`🗄️  Database: ${process.env.DATABASE_URL ? 'configured' : '⚠️  NOT SET'}`);
+    console.log(`📦 Redis: ${process.env.REDIS_URL ? 'configured' : 'not configured (L1 only)'}`);
   });
 }
 

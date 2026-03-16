@@ -130,7 +130,7 @@ resource apiApp 'Microsoft.Web/sites@2023-01-01' = {
         }
         {
           name: 'CORS_ORIGIN'
-          value: corsOrigin != '' ? corsOrigin : 'https://app-web-${suffix}.azurewebsites.net'
+          value: corsOrigin != '' ? '${corsOrigin},https://fuelripple.com' : 'https://app-web-${suffix}.azurewebsites.net'
         }
         {
           name: 'ENVIRONMENT'

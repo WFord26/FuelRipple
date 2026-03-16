@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { getRegionalComparison } from '../api/client';
 import { usePageSEO } from '../hooks/usePageSEO';
 import { Chart, Settings, BarSeries, Axis, DARK_THEME, ScaleType, Position, Tooltip } from '@elastic/charts';
@@ -86,6 +87,7 @@ export default function Comparison() {
   });
 
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
+  const navigate = useNavigate();
 
   const { data: comparisonData, isLoading } = useQuery({
     queryKey: ['priceComparison'],
@@ -150,8 +152,8 @@ export default function Comparison() {
       {/* US Choropleth Map */}
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
         <h3 className="text-lg font-semibold text-white mb-2">Price Map by State</h3>
-        <p className="text-xs text-slate-500 mb-4">Colored by regular gas price · PADD region borders shown · hover for details</p>
-        <USPriceMap comparisonData={comparisonData ?? []} height={400} />
+        <p className="text-xs text-slate-500 mb-4">Colored by regular gas price · PADD region borders shown · hover for details · click a state for detail</p>
+        <USPriceMap comparisonData={comparisonData ?? []} height={400} onStateClick={(abbr) => navigate(`/state/${abbr}`)} />
       </div>
 
       {/* Chart */}

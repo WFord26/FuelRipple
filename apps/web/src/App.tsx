@@ -11,6 +11,9 @@ const Impact     = lazy(() => import('./pages/Impact'));
 const Correlation = lazy(() => import('./pages/Correlation'));
 const Supply     = lazy(() => import('./pages/Supply'));
 const Downstream = lazy(() => import('./pages/Downstream'));
+const StatePage    = lazy(() => import('./pages/State'));
+const StatePrices  = lazy(() => import('./pages/StatePrices'));
+const DataStatus   = lazy(() => import('./pages/DataStatus'));
 
 // ── Shared loading skeleton ──────────────────────────────────────────────────
 function PageSkeleton() {
@@ -66,6 +69,21 @@ function App() {
           <Route path="downstream" element={
             <ErrorBoundary section="Downstream Impact" inline={false}>
               <Suspense fallback={<PageSkeleton />}><Downstream /></Suspense>
+            </ErrorBoundary>
+          } />
+          <Route path="state-prices" element={
+            <ErrorBoundary section="State Prices" inline={false}>
+              <Suspense fallback={<PageSkeleton />}><StatePrices /></Suspense>
+            </ErrorBoundary>
+          } />
+          <Route path="data-status" element={
+            <ErrorBoundary section="Data Status" inline={false}>
+              <Suspense fallback={<PageSkeleton />}><DataStatus /></Suspense>
+            </ErrorBoundary>
+          } />
+          <Route path="state/:stateAbbr" element={
+            <ErrorBoundary section="State Detail" inline={false}>
+              <Suspense fallback={<PageSkeleton />}><StatePage /></Suspense>
             </ErrorBoundary>
           } />
         </Route>

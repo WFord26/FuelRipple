@@ -9,6 +9,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.3-beta.0] - 2026-03-15
+### Added
+- **WTI Crude Oil card** on the dashboard — displays latest WTI closing price with
+  pump-price sensitivity note ($10/bbl ≈ $0.25/gal), sourced from existing
+  `crude_wti` data in `energy_prices`
+- **Gasoline Inventory days-of-supply card** — shows estimated days of supply with a
+  z-score badge vs 52-week seasonal norm (color-coded orange/red below -1σ/-2σ);
+  consumes `/api/v1/supply/inventories`
+- **Seasonal Context card** — compares the current gas price against the 5-year
+  average for the same ISO week, showing the dollar and percentage delta
+  - New DB query `getSeasonalComparison()` in `@fuelripple/db`
+  - New API endpoint `GET /api/v1/prices/seasonal`
+  - New client helper `getSeasonalComparison()` in `apps/web/src/api/client.ts`
+- **Recent Market Events feed** — surfaces the 5 most recent `geo_events` rows on the
+  dashboard with impact direction badges (bullish/bearish), category labels, and dates
+- **Volatility badge** — inline next to the Disruption Score, showing annualized
+  volatility % and classification (calm / moderate / elevated / extreme)
+- **`getCurrentCrudePrice()` client helper** (`apps/web/src/api/client.ts`) — thin
+  wrapper around `/prices/current?metric=crude_wti`
+- **State detail page** (`/state/:stateAbbr`) — new route showing per-state gas price
+  breakdown with:
+  - Current price vs national and PADD regional averages (with % diff badges)
+  - Seasonal comparison against 5-year same-week average
+  - Price change cards (1 week, 1 month, 3 months, 1 year ago)
+  - Historical weekly price chart (PriceChart component)
+  - Annual household fuel cost calculated at the state price
+  - Visual price-position bars vs national, PADD, and seasonal averages
+  - Graceful fallback for states EIA doesn't report (shows PADD average as proxy)
+- **Clickable state map** — `USPriceMap` component now accepts `onStateClick` prop;
+  clicking any state on the Dashboard or Regional Comparison page navigates to
+  `/state/{abbr}`
+- **Fuel type toggle (Regular Gas / Diesel)** — pill-style toggle on both the Dashboard
+  and State detail page switches all price queries, disruption score, volatility,
+  seasonal comparison, regional map, and price change cards between `gas_regular` and
+  `diesel` metrics. AAA already scrapes diesel per state; EIA provides national diesel.
+- **State-level EIA diesel data** — expanded `fetchDieselPrices()` to fetch all regions
+  (50 states + PADDs + national) with pagination, matching the `fetchAllGasPrices()`
+  pattern. Updated `processDieselPrices` (job queue) and `backfillDieselPrices`
+  (backfill script) to handle multi-region results. Historical diesel charts now
+  populate at the state level, not just national.
+- **Synthetic state-level history backfill** (`--sources states`) — for the ~40 states
+  where EIA lacks direct weekly gas/diesel data, generates estimated price history by
+  applying current AAA state-to-PADD price ratios to PADD-level EIA time series.
+  Inserted as `source='estimated'` to distinguish from real data. Added `'estimated'`
+  to the `EnergyPriceSchema` source enum in `@fuelripple/shared`.
+- **Materialized view refresh in backfill** — backfill script now calls
+  `refreshMaterializedViews()` after all sources complete, so historical data is
+  immediately visible to the API (previously views were stale after backfill).
+- **Diesel inventory on dashboard** — inventory days-of-supply card now switches between
+  gasoline and distillate (diesel) metrics when the fuel type toggle is changed. Added
+  `distillate_days_supply` and `distillate_z_score` to the `getInventoryData()` query
+  in `@fuelripple/db`, using `distillate_production` as the demand proxy for days of
+  supply and a 52-week rolling window for z-score.
+
+### Fixed
+- **CI/CD deploy workflow** — updated health-check URLs, removed Bicep infra job,
+  removed resource-group verification step, scoped dev deploys to push and prod to
+  `workflow_dispatch`
+
+---
+
 ## [1.0.2] - 2026-03-15
 
 ### Added

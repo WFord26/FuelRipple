@@ -1,6 +1,6 @@
 {
   "name": "@fuelripple/api",
-  "version": "1.0.3-beta.0",
+  "version": "1.0.3",
   "private": true,
   "main": "./dist/index.js",
   "scripts": {

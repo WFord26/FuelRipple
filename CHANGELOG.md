@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.6-beta.0] - 2026-03-16
+
+### Added
+- **Azure Application Insights analytics** — end-to-end telemetry across the
+  frontend, API, and infrastructure.
+  - *Frontend*: `src/lib/appInsights.ts` initializes the SDK + `ReactPlugin`;
+    `usePageTracking()` hook auto-tracks every React Router navigation;
+    `useTrackEvent(category)` returns a stable callback for custom feature
+    events. `AppInsightsContext.Provider` wraps the React tree in `main.tsx`.
+    No-ops automatically when `VITE_APPINSIGHTS_CONNECTION_STRING` is unset
+    (zero impact on local dev).
+  - *API*: `src/lib/appInsights.ts` enables auto-collection of HTTP requests,
+    outgoing dependencies (EIA, FRED, AAA), exceptions, performance counters,
+    and console errors. Initialized before all other imports to allow SDK
+    monkey-patching. Exports `trackApiEvent`, `trackApiException`, and
+    `trackMetric` for manual telemetry in route handlers and services.
+  - *ErrorBoundary*: `componentDidCatch` now forwards captured React errors to
+    Application Insights with section label and component stack as properties.
+  - *Infrastructure*: new `infra/modules/app-insights.bicep` provisions a
+    workspace-based Log Analytics workspace + Application Insights component.
+    `main.bicep` wires the module and threads the connection string into the
+    API App Service app settings automatically on deploy. Outputs include
+    `appInsightsConnectionString`, `appInsightsResourceId`, and
+    `logAnalyticsWorkspaceId`.
+  - *CI/CD*: `deploy.yml` passes `VITE_APPINSIGHTS_CONNECTION_STRING` as a
+    Docker build arg sourced from the `APPINSIGHTS_CONNECTION_STRING` GitHub
+    Environment secret, baking it into the Vite bundle at build time.
+
+---
+
 ## [1.0.5-beta.0] - 2026-03-15
 
 ### Added

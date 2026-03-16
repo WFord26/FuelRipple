@@ -11,6 +11,8 @@
 #   AZUREAPPSERVICE_TENANTID_2C00FBAC276C4F1ABC367E552374A0CA
 #   AZUREAPPSERVICE_SUBSCRIPTIONID_43645EA172E34549B2664D9DDDEFE163
 #   DATABASE_URL            — Full PostgreSQL connection string (migrations)
+#   APPINSIGHTS_CONNECTION_STRING — Azure Application Insights connection string
+#                                   (baked into web image at build time)
 # =============================================================================
 
 name: Build + Deploy
@@ -193,6 +195,7 @@ jobs:
           push: true
           build-args: |
             VITE_API_URL=https://api.fuelripple.com/api/v1
+            VITE_APPINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONNECTION_STRING }}
           tags: |
             ${{ secrets.ACR_LOGIN_SERVER }}/fuelripple-${{ matrix.app }}:${{ needs.setup.outputs.image_tag }}
             ${{ needs.setup.outputs.push_latest == 'true' && format('{0}/fuelripple-{1}:latest', secrets.ACR_LOGIN_SERVER, matrix.app) || '' }}

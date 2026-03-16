@@ -5,8 +5,8 @@ import Layout from '../components/Layout';
 describe('Layout component', () => {
   it('renders the FuelRipple brand name', () => {
     render(<Layout />);
-    expect(screen.getByText('Fuel')).toBeInTheDocument();
-    expect(screen.getByText('Ripple')).toBeInTheDocument();
+    expect(screen.getAllByText('Fuel').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Ripple').length).toBeGreaterThan(0);
   });
 
   it('renders all desktop navigation links', () => {
@@ -21,8 +21,10 @@ describe('Layout component', () => {
 
   it('renders the footer', () => {
     render(<Layout />);
-    expect(screen.getByText(/Data sources/)).toBeInTheDocument();
-    expect(screen.getByText(/EIA, FRED/)).toBeInTheDocument();
+    expect(screen.getByText('Data Sources')).toBeInTheDocument();
+    expect(screen.getByText('EIA — Weekly Petroleum Status Report')).toBeInTheDocument();
+    expect(screen.getByText('FRED — Federal Reserve Economic Data')).toBeInTheDocument();
+    expect(screen.getByText('BLS — CPI & PPI Indicators')).toBeInTheDocument();
   });
 
   it('renders the hamburger button for mobile', () => {
@@ -46,7 +48,7 @@ describe('Layout component', () => {
 
   it('renders GitHub link in footer', () => {
     render(<Layout />);
-    const githubLink = screen.getByText('GitHub');
+    const githubLink = screen.getByText(/GitHub/);
     expect(githubLink).toHaveAttribute('href', 'https://github.com/WFord26/FuelRipple');
     expect(githubLink).toHaveAttribute('target', '_blank');
   });

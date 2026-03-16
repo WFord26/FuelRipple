@@ -82,6 +82,7 @@ export async function getUtilizationByRegion(region?: string): Promise<any[]> {
         operable_capacity
       FROM refinery_operations
       WHERE utilization_pct IS NOT NULL
+        AND time >= NOW() - INTERVAL '8 weeks'
         ${region ? 'AND region = ?' : ''}
       ORDER BY region, time DESC
     ),
@@ -262,6 +263,7 @@ export async function getSupplyHealth(): Promise<any[]> {
         distillate_stocks
       FROM refinery_operations
       WHERE utilization_pct IS NOT NULL
+        AND time >= NOW() - INTERVAL '8 weeks'
       ORDER BY region, time DESC
     ),
     stats_52w AS (
@@ -273,6 +275,7 @@ export async function getSupplyHealth(): Promise<any[]> {
         STDDEV(gasoline_stocks) AS std_stocks
       FROM refinery_operations
       WHERE time >= NOW() - INTERVAL '52 weeks'
+        AND utilization_pct IS NOT NULL
       GROUP BY region
     )
     SELECT

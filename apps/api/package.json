@@ -14,7 +14,8 @@
     "lint": "eslint src/",
     "backfill": "tsx --env-file=../../.env src/scripts/backfill.ts",
     "download-crude": "tsx --env-file=../../.env src/scripts/download-crude.ts",
-    "scrape-aaa": "tsx src/scripts/scrape-aaa-history.ts"
+    "scrape-aaa": "tsx src/scripts/scrape-aaa-history.ts",
+    "import-aaa": "tsx --env-file=../../.env src/scripts/import-aaa-csv.ts"
   },
   "dependencies": {
     "@fuelripple/db": "*",

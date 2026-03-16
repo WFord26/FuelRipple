@@ -46,6 +46,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pattern. Updated `processDieselPrices` (job queue) and `backfillDieselPrices`
   (backfill script) to handle multi-region results. Historical diesel charts now
   populate at the state level, not just national.
+- **Synthetic state-level history backfill** (`--sources states`) — for the ~40 states
+  where EIA lacks direct weekly gas/diesel data, generates estimated price history by
+  applying current AAA state-to-PADD price ratios to PADD-level EIA time series.
+  Inserted as `source='estimated'` to distinguish from real data. Added `'estimated'`
+  to the `EnergyPriceSchema` source enum in `@fuelripple/shared`.
+- **Materialized view refresh in backfill** — backfill script now calls
+  `refreshMaterializedViews()` after all sources complete, so historical data is
+  immediately visible to the API (previously views were stale after backfill).
 
 ### Fixed
 - **CI/CD deploy workflow** — updated health-check URLs, removed Bicep infra job,

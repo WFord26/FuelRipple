@@ -139,6 +139,62 @@ export async function getWeeklyChanges(
 }
 
 /**
+ * Get the latest daily price for every state across all fuel metrics.
+ * Returns one row per state with regular, midgrade, premium, and diesel prices.
+ */
+export async function getAllStatePrices(): Promise<any[]> {
+  const knex = getKnex();
+
+  return knex.raw(`
+    WITH latest AS (
+      SELECT DISTINCT ON (metric, region)
+        metric, region, value, time
+      FROM energy_prices
+      WHERE metric IN ('gas_regular', 'gas_midgrade', 'gas_premium', 'diesel')
+        AND region ~ '^S[A-Z]{2}$'
+      ORDER BY metric, region, time DESC
+    )
+    SELECT
+      region,
+      MAX(CASE WHEN metric = 'gas_regular'  THEN value END) AS regular,
+      MAX(CASE WHEN metric = 'gas_midgrade' THEN value END) AS mid_grade,
+      MAX(CASE WHEN metric = 'gas_premium'  THEN value END) AS premium,
+      MAX(CASE WHEN metric = 'diesel'       THEN value END) AS diesel,
+      MAX(time) AS time
+    FROM latest
+    GROUP BY region
+    ORDER BY region
+  `).then((r: any) => r.rows);
+}
+
+/**
+ * Get data freshness information — latest timestamp per source × metric × region class.
+ * Region class is one of: national (NUS/US), PADD (R**), or state (S**).
+ */
+export async function getDataStatus(): Promise<any[]> {
+  const knex = getKnex();
+
+  return knex.raw(`
+    SELECT
+      source,
+      metric,
+      CASE
+        WHEN region IN ('US', 'NUS') THEN 'National'
+        WHEN region ~ '^R[0-9]+$'    THEN 'PADD'
+        WHEN region ~ '^S[A-Z]{2}$'  THEN 'State'
+        ELSE 'Other'
+      END AS region_class,
+      COUNT(DISTINCT region) AS region_count,
+      MAX(time)              AS latest_time,
+      MIN(time)              AS earliest_time,
+      COUNT(*)               AS total_rows
+    FROM energy_prices
+    GROUP BY source, metric, region_class
+    ORDER BY source, metric, region_class
+  `).then((r: any) => r.rows);
+}
+
+/**
  * Get price changes vs 1 week, 1 month, and 1 year ago for a metric/region
  */
 export async function getPriceChanges(metric: string, region: string): Promise<any> {

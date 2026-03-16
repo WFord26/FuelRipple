@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { PriceHistoryQuerySchema } from '@fuelripple/shared';
-import { getHistoricalPrices, getCurrentPrices, getPriceStats, getPriceChanges, getSeasonalComparison } from '@fuelripple/db';
+import { getHistoricalPrices, getCurrentPrices, getPriceStats, getPriceChanges, getSeasonalComparison, getAllStatePrices, getDataStatus } from '@fuelripple/db';
 import { cacheOrFetch } from '../services/cache';
 import { CACHE_TTL } from '@fuelripple/shared';
 import { AppError } from '../middleware/errorHandler';
@@ -238,6 +238,58 @@ router.get('/seasonal', async (req: Request, res: Response, next: NextFunction) 
       status: 'success',
       data,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/prices/states
+ * Latest daily price for every state — regular, midgrade, premium, diesel in one row.
+ */
+router.get('/states', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await cacheOrFetch(
+      'prices:states:all',
+      async () => {
+        const rows = await getAllStatePrices();
+        // Enrich with state names
+        return rows.map((r: any) => {
+          const info = STATE_INFO[r.region];
+          return {
+            region: r.region,
+            abbr: info?.abbr ?? r.region,
+            name: info?.name ?? r.region,
+            regular: r.regular != null ? parseFloat(r.regular) : null,
+            midGrade: r.mid_grade != null ? parseFloat(r.mid_grade) : null,
+            premium: r.premium != null ? parseFloat(r.premium) : null,
+            diesel: r.diesel != null ? parseFloat(r.diesel) : null,
+            time: r.time,
+          };
+        });
+      },
+      CACHE_TTL.WEEKLY_GAS,
+    );
+
+    res.json({ status: 'success', data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/prices/data-status
+ * Data freshness report — latest timestamp per source × metric × region class.
+ */
+router.get('/data-status', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await cacheOrFetch(
+      'prices:data-status',
+      () => getDataStatus(),
+      300, // 5 min cache
+    );
+
+    res.json({ status: 'success', data });
   } catch (error) {
     next(error);
   }

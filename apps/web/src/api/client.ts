@@ -117,6 +117,35 @@ export const getSeasonalComparison = async (metric = 'gas_regular', region = 'NU
   } | null;
 };
 
+// All states latest prices — one row per state with all fuel types
+export const getAllStatePrices = async () => {
+  const response = await apiClient.get('/prices/states');
+  return response.data.data as {
+    region: string;
+    abbr: string;
+    name: string;
+    regular: number | null;
+    midGrade: number | null;
+    premium: number | null;
+    diesel: number | null;
+    time: string;
+  }[];
+};
+
+// Data freshness / status report
+export const getDataStatus = async () => {
+  const response = await apiClient.get('/prices/data-status');
+  return response.data.data as {
+    source: string;
+    metric: string;
+    region_class: string;
+    region_count: number;
+    latest_time: string;
+    earliest_time: string;
+    total_rows: number;
+  }[];
+};
+
 // Current crude oil price
 export const getCurrentCrudePrice = async () => {
   const response = await apiClient.get('/prices/current', { params: { metric: 'crude_wti' } });

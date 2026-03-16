@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -79,54 +79,51 @@ export default function State() {
   const stateName = ABBR_TO_NAME[abbr];
   const duoarea = ABBR_TO_DUOAREA[abbr];
   const padd = ABBR_TO_PADD[abbr];
+  const [fuelType, setFuelType] = useState<'gas_regular' | 'diesel'>('gas_regular');
+  const fuelLabel = fuelType === 'gas_regular' ? 'Regular Gasoline' : 'Diesel';
 
   usePageSEO({
     title: stateName ? `${stateName} Gas Prices` : 'State Gas Prices',
     description: stateName
-      ? `Current ${stateName} gasoline prices, historical trends, and consumer impact. Compare ${abbr} prices to the national and ${padd?.name ?? 'regional'} average.`
+      ? `Current ${stateName} gasoline and diesel prices, historical trends, and consumer impact. Compare ${abbr} prices to the national and ${padd?.name ?? 'regional'} average.`
       : 'State-level gasoline price data',
     canonicalPath: `/state/${abbr}`,
   });
 
   // ── Queries ────────────────────────────────────────────────────────────────
-  // State-level current prices (all regions come back — we'll filter)
   const { data: allPrices, isLoading: pricesLoading } = useQuery({
-    queryKey: ['currentPrices', 'gas_regular'],
-    queryFn: () => getCurrentPrices('gas_regular'),
+    queryKey: ['currentPrices', fuelType],
+    queryFn: () => getCurrentPrices(fuelType),
     enabled: !!duoarea,
   });
 
-  // Historical price chart data
   const { data: history, isLoading: historyLoading } = useQuery({
-    queryKey: ['stateHistory', duoarea],
-    queryFn: () => getHistoricalPrices({ metric: 'gas_regular', region: duoarea!, granularity: 'weekly' }),
+    queryKey: ['stateHistory', duoarea, fuelType],
+    queryFn: () => getHistoricalPrices({ metric: fuelType, region: duoarea!, granularity: 'weekly' }),
     enabled: !!duoarea,
   });
 
-  // Price changes (week/month/year deltas)
   const { data: priceChanges } = useQuery({
-    queryKey: ['statePriceChanges', duoarea],
-    queryFn: () => getPriceChanges('gas_regular', duoarea!),
+    queryKey: ['statePriceChanges', duoarea, fuelType],
+    queryFn: () => getPriceChanges(fuelType, duoarea!),
     enabled: !!duoarea,
   });
 
-  // Consumer impact at current state price
   const { data: impact } = useQuery({
     queryKey: ['stateImpact', duoarea],
     queryFn: () => getTypicalImpact(duoarea!),
     enabled: !!duoarea,
   });
 
-  // Seasonal comparison
   const { data: seasonal } = useQuery({
-    queryKey: ['stateSeasonal', duoarea],
-    queryFn: () => getSeasonalComparison('gas_regular', duoarea!, 5),
+    queryKey: ['stateSeasonal', duoarea, fuelType],
+    queryFn: () => getSeasonalComparison(fuelType, duoarea!, 5),
     enabled: !!duoarea,
   });
 
   // National + PADD averages for comparison
   const nationalPrice = useMemo(() => {
-    return allPrices?.find((p: any) => p.region === 'NUS')?.value ?? null;
+    return allPrices?.find((p: any) => p.region === 'NUS' || p.region === 'US')?.value ?? null;
   }, [allPrices]);
 
   const paddPrice = useMemo(() => {
@@ -179,11 +176,36 @@ export default function State() {
       </div>
 
       {/* Header */}
-      <div>
-        <h2 className="text-3xl font-bold text-white mb-1">{stateName} ({abbr})</h2>
-        <p className="text-slate-400">
-          {padd?.name} (PADD {padd?.code.replace('R', '')}) · Regular gasoline
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-3xl font-bold text-white mb-1">{stateName} ({abbr})</h2>
+          <p className="text-slate-400">
+            {padd?.name} (PADD {padd?.code.replace('R', '')}) · {fuelLabel}
+          </p>
+        </div>
+        {/* Fuel type toggle */}
+        <div className="flex items-center bg-slate-800 rounded-lg border border-slate-700 p-1">
+          <button
+            onClick={() => setFuelType('gas_regular')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+              fuelType === 'gas_regular'
+                ? 'bg-primary-600 text-white'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            ⛽ Regular Gas
+          </button>
+          <button
+            onClick={() => setFuelType('diesel')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+              fuelType === 'diesel'
+                ? 'bg-primary-600 text-white'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            🚛 Diesel
+          </button>
+        </div>
       </div>
 
       {/* Price Overview Cards */}
@@ -266,7 +288,7 @@ export default function State() {
       {/* Historical Chart */}
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
         <h3 className="text-lg font-semibold text-white mb-4">
-          Price History — {stateName}
+          Price History — {stateName} ({fuelLabel})
         </h3>
         {historyLoading ? (
           <div className="flex justify-center items-center h-64">

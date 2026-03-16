@@ -310,21 +310,29 @@ async function processCrudePrices(): Promise<void> {
 }
 
 /**
- * Process diesel prices from EIA
+ * Process diesel prices from EIA (all regions)
  */
 async function processDieselPrices(): Promise<void> {
   console.log('Fetching diesel prices from EIA...');
   
-  const { data } = await fetchDieselPrices();
-  const prices: EnergyPrice[] = data.map(point => ({
-    time: new Date(point.period),
-    source: 'eia',
-    metric: 'diesel',
-    region: 'US',
-    value: point.value,
-    unit: 'usd_per_gallon',
-  }));
+  const results = await fetchDieselPrices();
+  console.log(`Received ${results.length} regional diesel datasets from EIA`);
 
+  const prices: EnergyPrice[] = [];
+  for (const { region, data } of results) {
+    for (const point of data) {
+      prices.push({
+        time: new Date(point.period),
+        source: 'eia',
+        metric: 'diesel',
+        region,
+        value: point.value,
+        unit: 'usd_per_gallon',
+      });
+    }
+  }
+
+  console.log(`Prepared ${prices.length} diesel price records for insertion`);
   await insertPrices(prices);
   console.log(`✅ Inserted ${prices.length} diesel price records`);
   await refreshMaterializedViews();

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { getCurrentPrices, getDisruptionScore, getTypicalImpact, getRegionalComparison, getPriceChanges, getSupplyHealth, getDownstreamImpact, getVolatility, getEvents, getSupplyInventories, getCurrentCrudePrice, getSeasonalComparison } from '../api/client';
@@ -34,6 +35,9 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [fuelType, setFuelType] = useState<'gas_regular' | 'diesel'>('gas_regular');
+  const fuelLabel = fuelType === 'gas_regular' ? 'Regular Gasoline' : 'Diesel';
+
   usePageSEO({
     title: 'US Gas Price Dashboard',
     description: 'Live US gasoline prices across all PADD regions and 50 states. Includes a Consumer Disruption Index, supply health alerts, and crude oil correlation. Data from EIA, FRED, and AAA.',
@@ -41,23 +45,23 @@ export default function Dashboard() {
   });
 
   const { data: prices, isLoading: pricesLoading } = useQuery({
-    queryKey: ['currentPrices'],
-    queryFn: () => getCurrentPrices('gas_regular'),
+    queryKey: ['currentPrices', fuelType],
+    queryFn: () => getCurrentPrices(fuelType),
   });
 
   const { data: priceChanges } = useQuery({
-    queryKey: ['priceChanges'],
-    queryFn: () => getPriceChanges('gas_regular', 'NUS'),
+    queryKey: ['priceChanges', fuelType],
+    queryFn: () => getPriceChanges(fuelType, fuelType === 'diesel' ? 'US' : 'NUS'),
   });
 
   const { data: comparisonData } = useQuery({
-    queryKey: ['priceComparison'],
-    queryFn: () => getRegionalComparison('gas_regular'),
+    queryKey: ['priceComparison', fuelType],
+    queryFn: () => getRegionalComparison(fuelType),
   });
 
   const { data: disruption, isLoading: disruptionLoading } = useQuery({
-    queryKey: ['disruptionScore'],
-    queryFn: () => getDisruptionScore(),
+    queryKey: ['disruptionScore', fuelType],
+    queryFn: () => getDisruptionScore(fuelType),
   });
 
   const { data: impact, isLoading: impactLoading } = useQuery({
@@ -86,8 +90,8 @@ export default function Dashboard() {
   });
 
   const { data: volatility } = useQuery({
-    queryKey: ['volatility'],
-    queryFn: () => getVolatility('gas_regular', 'US', 30),
+    queryKey: ['volatility', fuelType],
+    queryFn: () => getVolatility(fuelType, 'US', 30),
     staleTime: 60 * 60 * 1000,
   });
 
@@ -104,8 +108,8 @@ export default function Dashboard() {
   });
 
   const { data: seasonal } = useQuery({
-    queryKey: ['seasonalComparison'],
-    queryFn: () => getSeasonalComparison('gas_regular', 'NUS', 5),
+    queryKey: ['seasonalComparison', fuelType],
+    queryFn: () => getSeasonalComparison(fuelType, fuelType === 'diesel' ? 'US' : 'NUS', 5),
     staleTime: 24 * 60 * 60 * 1000,
   });
 
@@ -117,13 +121,38 @@ export default function Dashboard() {
     );
   }
 
-  const nationalPrice = prices?.find((p: any) => p.region === 'NUS');
+  const nationalPrice = prices?.find((p: any) => p.region === 'NUS' || p.region === 'US');
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold text-white mb-2">Price Overview</h2>
-        <p className="text-slate-400">Current US gasoline prices and consumer impact</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-3xl font-bold text-white mb-2">Price Overview</h2>
+          <p className="text-slate-400">Current US {fuelLabel.toLowerCase()} prices and consumer impact</p>
+        </div>
+        {/* Fuel type toggle */}
+        <div className="flex items-center bg-slate-800 rounded-lg border border-slate-700 p-1">
+          <button
+            onClick={() => setFuelType('gas_regular')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+              fuelType === 'gas_regular'
+                ? 'bg-primary-600 text-white'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            ⛽ Regular Gas
+          </button>
+          <button
+            onClick={() => setFuelType('diesel')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+              fuelType === 'diesel'
+                ? 'bg-primary-600 text-white'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            🚛 Diesel
+          </button>
+        </div>
       </div>
 
       {/* National Average — 5 squares */}

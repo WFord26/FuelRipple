@@ -56,6 +56,7 @@ import {
   insertPrices,
   insertIndicators,
   upsertRefineryData,
+  refreshMaterializedViews,
   closeConnection,
 } from '@fuelripple/db';
 
@@ -234,20 +235,26 @@ async function backfillCrudePrices(start: string, end: string, dryRun: boolean):
 }
 
 async function backfillDieselPrices(start: string, end: string, dryRun: boolean): Promise<void> {
-  separator('EIA  ▸  Diesel Retail Prices (US National)');
+  separator('EIA  ▸  Diesel Retail Prices (All Regions)');
   log(`Date range: ${start} → ${end}`);
 
-  const { data } = await fetchDieselPrices(start, end);
-  const prices: EnergyPrice[] = data
-    .filter(p => !isNaN(p.value))
-    .map(point => ({
-      time: new Date(point.period),
-      source: 'eia',
-      metric: 'diesel',
-      region: 'US',
-      value: point.value,
-      unit: 'usd_per_gallon',
-    }));
+  const results = await fetchDieselPrices(start, end);
+  log(`Received ${results.length} regional diesel datasets from EIA`);
+
+  const prices: EnergyPrice[] = [];
+  for (const { region, data } of results) {
+    for (const point of data) {
+      if (isNaN(point.value)) continue;
+      prices.push({
+        time: new Date(point.period),
+        source: 'eia',
+        metric: 'diesel',
+        region,
+        value: point.value,
+        unit: 'usd_per_gallon',
+      });
+    }
+  }
 
   log(`Prepared ${prices.length} diesel price records`);
   if (!dryRun) {
@@ -432,6 +439,12 @@ async function main(): Promise<void> {
         await run(source, () => backfillRefineryData(opts.start, opts.end, opts.dryRun));
         break;
     }
+  }
+
+  // Refresh materialized views so history queries see the new data
+  if (!opts.dryRun && results.some(r => r.status === 'ok')) {
+    log('Refreshing materialized views (daily, weekly, monthly)...');
+    await refreshMaterializedViews();
   }
 
   // Summary

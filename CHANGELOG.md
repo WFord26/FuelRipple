@@ -37,6 +37,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Clickable state map** — `USPriceMap` component now accepts `onStateClick` prop;
   clicking any state on the Dashboard or Regional Comparison page navigates to
   `/state/{abbr}`
+- **Fuel type toggle (Regular Gas / Diesel)** — pill-style toggle on both the Dashboard
+  and State detail page switches all price queries, disruption score, volatility,
+  seasonal comparison, regional map, and price change cards between `gas_regular` and
+  `diesel` metrics. AAA already scrapes diesel per state; EIA provides national diesel.
+- **State-level EIA diesel data** — expanded `fetchDieselPrices()` to fetch all regions
+  (50 states + PADDs + national) with pagination, matching the `fetchAllGasPrices()`
+  pattern. Updated `processDieselPrices` (job queue) and `backfillDieselPrices`
+  (backfill script) to handle multi-region results. Historical diesel charts now
+  populate at the state level, not just national.
 
 ### Fixed
 - **CI/CD deploy workflow** — updated health-check URLs, removed Bicep infra job,

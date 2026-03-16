@@ -73,6 +73,15 @@ module storage 'modules/storage.bicep' = if (enableRedis) {
   }
 }
 
+// Azure Monitor: Log Analytics + Application Insights
+module monitoring 'modules/app-insights.bicep' = {
+  name: 'app-insights'
+  params: {
+    suffix: suffix
+    location: location
+  }
+}
+
 // PostgreSQL Flexible Server (Burstable B1ms + TimescaleDB)
 module database 'modules/postgres-flexible.bicep' = {
   name: 'postgres'
@@ -130,6 +139,7 @@ module appService 'modules/app-service.bicep' = {
     environment: environment
     frontDoorId: enableFrontDoor ? (frontDoor.?outputs.frontDoorId ?? '') : ''
     corsOrigin: enableFrontDoor ? (frontDoor.?outputs.frontDoorUrl ?? '') : ''
+    appInsightsConnectionString: monitoring.outputs.connectionString
   }
 }
 
@@ -144,6 +154,9 @@ output databaseConnectionString string = database.outputs.connectionString
 output frontDoorEnabled bool = enableFrontDoor
 output frontDoorUrl string = enableFrontDoor ? (frontDoor.?outputs.frontDoorUrl ?? '') : ''
 output frontDoorEndpointCname string = enableFrontDoor ? (frontDoor.?outputs.endpointCname ?? '') : ''
+output appInsightsConnectionString string = monitoring.outputs.connectionString
+output appInsightsResourceId string = monitoring.outputs.resourceId
+output logAnalyticsWorkspaceId string = monitoring.outputs.workspaceId
 
 // DNS setup — create these records at your registrar after deployment
 // CNAME  www           → <frontDoorEndpointCname>

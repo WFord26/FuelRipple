@@ -29,6 +29,9 @@ param frontDoorId string = ''
 @description('CORS allowed origin. Defaults to the web App Service URL if not set.')
 param corsOrigin string = ''
 
+@description('Azure Application Insights connection string for server-side telemetry.')
+param appInsightsConnectionString string = ''
+
 // App Service Plan (Linux)
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-01-01' = {
   name: 'plan-${suffix}'
@@ -135,6 +138,14 @@ resource apiApp 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'ENVIRONMENT'
           value: environment
+        }
+        {
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: appInsightsConnectionString
+        }
+        {
+          name: 'ApplicationInsightsAgent_EXTENSION_VERSION'
+          value: '~3'
         }
       ]
     }

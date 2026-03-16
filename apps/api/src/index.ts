@@ -1,12 +1,17 @@
+// Application Insights MUST be initialized before any other imports
+// so it can instrument http/https for automatic dependency tracking.
+import { initAppInsights } from './lib/appInsights';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load environment variables first so the connection string is available
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+initAppInsights();
+
 import express, { Application } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
-import path from 'path';
-
-// Load environment variables
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 import pricesRouter from './routes/prices';
 import disruptionRouter from './routes/disruption';

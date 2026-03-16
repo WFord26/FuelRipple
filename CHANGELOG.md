@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Rockets & Feathers asymmetry** — rewrote `analyzeRocketsAndFeathers()` in
+  `@fuelripple/impact-engine` to measure true elasticity ratio (gas Δ% per 1%
+  crude Δ, rise vs fall) instead of raw magnitude comparison. Added cumulative
+  pass-through speed (week 0–4) and half-life metrics. Updated API response,
+  frontend visualization with pass-through bar chart and half-life cards.
+
+### Fixed
+
+- **CORS multi-origin support** — API now parses comma-separated `CORS_ORIGIN`
+  env var; Bicep sets both `www.fuelripple.com` and `fuelripple.com`. Added
+  diagnostic logging on startup and in `/health` endpoint.
+
 ---
 
 ## [1.0.3-beta.0] - 2026-03-15

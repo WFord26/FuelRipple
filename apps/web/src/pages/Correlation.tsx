@@ -106,13 +106,20 @@ function CrossCorrelationChart({
 }
 
 function RocketsFeathersViz({
-  avgIncreaseSpeed, avgDecreaseSpeed, asymmetryRatio,
-}: { avgIncreaseSpeed: number; avgDecreaseSpeed: number; asymmetryRatio: number }) {
-  const maxSpeed = Math.max(avgIncreaseSpeed, avgDecreaseSpeed);
-  const risePct  = maxSpeed > 0 ? (avgIncreaseSpeed / maxSpeed) * 100 : 0;
-  const fallPct  = maxSpeed > 0 ? (avgDecreaseSpeed / maxSpeed) * 100 : 0;
-
-  const toPercent = (v: number) => `${(v * 100).toFixed(3)}%`;
+  asymmetryRatio,
+  riseElasticity, fallElasticity,
+  cumulativePassThrough, riseHalfLifeWeeks, fallHalfLifeWeeks,
+}: {
+  asymmetryRatio: number;
+  riseElasticity: number;
+  fallElasticity: number;
+  cumulativePassThrough: { lag: number; risePct: number; fallPct: number }[];
+  riseHalfLifeWeeks: number;
+  fallHalfLifeWeeks: number;
+}) {
+  const maxElasticity = Math.max(riseElasticity, fallElasticity);
+  const risePct  = maxElasticity > 0 ? (riseElasticity / maxElasticity) * 100 : 0;
+  const fallPct  = maxElasticity > 0 ? (fallElasticity / maxElasticity) * 100 : 0;
 
   const ratioColor =
     asymmetryRatio > 3 ? 'text-red-400' :
@@ -126,30 +133,30 @@ function RocketsFeathersViz({
 
   return (
     <div className="space-y-5">
-      {/* Asymmetry ratio hero */}
+      {/* Elasticity ratio hero */}
       <div className="flex items-center gap-6">
-        <div className="text-center">
+        <div className="text-center min-w-[80px]">
           <div className={`text-5xl font-bold tabular-nums ${ratioColor}`}>
             {asymmetryRatio > 0 ? `${asymmetryRatio.toFixed(1)}×` : '—'}
           </div>
-          <div className="text-xs text-slate-400 mt-1 uppercase tracking-wide">Asymmetry ratio</div>
+          <div className="text-xs text-slate-400 mt-1 uppercase tracking-wide">Elasticity ratio</div>
           <div className={`text-xs font-semibold mt-0.5 ${ratioColor}`}>{ratioLabel}</div>
         </div>
         <div className="flex-1 text-sm text-slate-400 leading-relaxed">
-          Prices <span className="text-red-400 font-semibold">rise {asymmetryRatio.toFixed(1)}× faster</span> than
-          they fall. A 1% crude price increase translates to a pump increase roughly {asymmetryRatio.toFixed(1)}× 
-          faster than an equivalent crude decline passes through to consumers.
+          When crude rises 1%, gas responds with <span className="text-red-400 font-semibold">{(riseElasticity * 100).toFixed(1)}%</span> at the pump.
+          When crude falls 1%, gas only drops <span className="text-green-400 font-semibold">{(fallElasticity * 100).toFixed(1)}%</span>.
+          That's a <span className={`font-semibold ${ratioColor}`}>{asymmetryRatio.toFixed(1)}× elasticity gap</span>.
         </div>
       </div>
 
-      {/* Speed comparison bars */}
+      {/* Elasticity comparison bars */}
       <div className="space-y-3">
         <div className="space-y-1.5">
           <div className="flex justify-between text-sm">
             <span className="flex items-center gap-2 text-red-400 font-medium">
-              <span>🚀</span> Rise speed (crude ↑)
+              <span>🚀</span> Rise elasticity (crude ↑)
             </span>
-            <span className="text-slate-300 tabular-nums">{toPercent(avgIncreaseSpeed)} avg weekly Δ</span>
+            <span className="text-slate-300 tabular-nums">{(riseElasticity * 100).toFixed(1)}% gas per 1% crude</span>
           </div>
           <div className="h-3 rounded-full bg-slate-700 overflow-hidden">
             <div
@@ -162,9 +169,9 @@ function RocketsFeathersViz({
         <div className="space-y-1.5">
           <div className="flex justify-between text-sm">
             <span className="flex items-center gap-2 text-green-400 font-medium">
-              <span>🪶</span> Fall speed (crude ↓)
+              <span>🪶</span> Fall elasticity (crude ↓)
             </span>
-            <span className="text-slate-300 tabular-nums">{toPercent(avgDecreaseSpeed)} avg weekly Δ</span>
+            <span className="text-slate-300 tabular-nums">{(fallElasticity * 100).toFixed(1)}% gas per 1% crude</span>
           </div>
           <div className="h-3 rounded-full bg-slate-700 overflow-hidden">
             <div
@@ -175,10 +182,65 @@ function RocketsFeathersViz({
         </div>
       </div>
 
+      {/* Cumulative pass-through chart */}
+      {cumulativePassThrough.length > 0 && (
+        <div className="border-t border-slate-700 pt-4">
+          <h4 className="text-sm font-semibold text-slate-300 mb-3">Cumulative Pass-Through Speed</h4>
+          <div className="grid grid-cols-5 gap-2 text-center text-xs">
+            {cumulativePassThrough.map(({ lag, risePct: rP, fallPct: fP }) => (
+              <div key={lag} className="space-y-2">
+                <div className="text-slate-500">Week {lag}</div>
+                <div className="relative h-24 bg-slate-800 rounded flex items-end justify-center gap-0.5 overflow-hidden">
+                  <div
+                    className="w-5 bg-gradient-to-t from-red-700 to-red-400 rounded-t transition-all duration-500"
+                    style={{ height: `${Math.max(rP, 2)}%` }}
+                    title={`Rise: ${rP.toFixed(0)}%`}
+                  />
+                  <div
+                    className="w-5 bg-gradient-to-t from-green-700 to-green-400 rounded-t transition-all duration-500"
+                    style={{ height: `${Math.max(fP, 2)}%` }}
+                    title={`Fall: ${fP.toFixed(0)}%`}
+                  />
+                </div>
+                <div className="space-y-0.5">
+                  <div className="text-red-400 tabular-nums">{rP.toFixed(0)}%</div>
+                  <div className="text-green-400 tabular-nums">{fP.toFixed(0)}%</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-4 mt-2 text-xs text-slate-500 justify-center">
+            <span><span className="inline-block w-2 h-2 rounded-sm bg-red-500 mr-1" />Crude ↑</span>
+            <span><span className="inline-block w-2 h-2 rounded-sm bg-green-500 mr-1" />Crude ↓</span>
+          </div>
+        </div>
+      )}
+
+      {/* Half-life comparison */}
+      {(riseHalfLifeWeeks > 0 || fallHalfLifeWeeks > 0) && (
+        <div className="flex gap-4 text-center border-t border-slate-700 pt-4">
+          <div className="flex-1 bg-slate-800 rounded-lg p-3">
+            <div className="text-2xl font-bold text-red-400 tabular-nums">{riseHalfLifeWeeks}w</div>
+            <div className="text-xs text-slate-500 mt-0.5">50% rise pass-through</div>
+          </div>
+          <div className="flex-1 bg-slate-800 rounded-lg p-3">
+            <div className="text-2xl font-bold text-green-400 tabular-nums">{fallHalfLifeWeeks}w</div>
+            <div className="text-xs text-slate-500 mt-0.5">50% fall pass-through</div>
+          </div>
+          <div className="flex-1 bg-slate-800 rounded-lg p-3">
+            <div className={`text-2xl font-bold tabular-nums ${fallHalfLifeWeeks > riseHalfLifeWeeks ? 'text-orange-400' : 'text-green-400'}`}>
+              {fallHalfLifeWeeks > riseHalfLifeWeeks ? `+${fallHalfLifeWeeks - riseHalfLifeWeeks}w` : '0w'}
+            </div>
+            <div className="text-xs text-slate-500 mt-0.5">Fall delay</div>
+          </div>
+        </div>
+      )}
+
       <p className="text-xs text-slate-500 border-t border-slate-700 pt-3">
-        An FTC study found pump prices rise more than four times as fast as they fall after crude oil changes — 
-        a pattern economists call "rockets and feathers." This is attributed to station-level inventory 
-        accounting (FIFO), consumer search-cost dynamics, and oligopolistic pricing behavior.
+        <strong>Elasticity ratio</strong> compares how much gas prices move per 1% crude change, 
+        up vs down. <strong>Pass-through speed</strong> measures what % of the total gas price 
+        adjustment has occurred by each week after a crude shock. An FTC study found pump prices 
+        typically rise 4× faster than they fall — the classic "rockets and feathers" effect.
       </p>
     </div>
   );
@@ -396,9 +458,15 @@ export default function Correlation() {
   };
 
   const rf = rfData?.data ?? rfData;
-  const asymmetryRatio: number = rf?.asymmetryRatio ?? 0;
+  const asymmetryRatio: number = rf?.elasticityRatio ?? rf?.asymmetryRatio ?? 0;
   const avgRise: number        = rf?.avgIncreaseSpeed ?? 0;
   const avgFall: number        = rf?.avgDecreaseSpeed ?? 0;
+  const riseElasticity: number = rf?.riseElasticity ?? 0;
+  const fallElasticity: number = rf?.fallElasticity ?? 0;
+  const cumulativePassThrough: { lag: number; risePct: number; fallPct: number }[] =
+    rf?.cumulativePassThrough ?? [];
+  const riseHalfLifeWeeks: number = rf?.riseHalfLifeWeeks ?? 0;
+  const fallHalfLifeWeeks: number = rf?.fallHalfLifeWeeks ?? 0;
 
   const hasCorr = !corrLoading && !corrError && crossCorr.length > 0;
   const hasRf   = !rfLoading  && !rfError  && asymmetryRatio > 0;
@@ -605,9 +673,12 @@ export default function Correlation() {
           )}
           {hasRf && (
             <RocketsFeathersViz
-              avgIncreaseSpeed={avgRise}
-              avgDecreaseSpeed={avgFall}
               asymmetryRatio={asymmetryRatio}
+              riseElasticity={riseElasticity}
+              fallElasticity={fallElasticity}
+              cumulativePassThrough={cumulativePassThrough}
+              riseHalfLifeWeeks={riseHalfLifeWeeks}
+              fallHalfLifeWeeks={fallHalfLifeWeeks}
             />
           )}
           {!rfLoading && !rfError && asymmetryRatio === 0 && (

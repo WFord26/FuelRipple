@@ -4,7 +4,7 @@ import { interpolateRdYlGn } from 'd3-scale-chromatic';
 import { merge } from 'topojson-client';
 import type { Topology, GeometryCollection } from 'topojson-specification';
 
-const US_ATLAS_URL = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json';
+const US_ATLAS_URL = '/states-10m.json';
 
 // FIPS → state abbreviation
 const FIPS_TO_ABBR: Record<string, string> = {

@@ -30,10 +30,10 @@ const ai = new ApplicationInsights({
     enablePerfMgr: true,
     // Do not track the AI endpoint calls themselves
     disableAjaxTracking: false,
-    excludeRequestFromAutoTrackingPatterns: [
-      /applicationinsights\.azure\.com/,
-      /cdn\.jsdelivr\.net/, // Exclude CDN to prevent CORS issues with request-id header
-    ],
+    excludeRequestFromAutoTrackingPatterns: [/applicationinsights\.azure\.com/],
+    // Prevent correlation headers (request-id, request-context) from being injected
+    // into requests to third-party CDNs that reject them via CORS preflight
+    correlationHeaderExcludedDomains: ['cdn.jsdelivr.net', '*.jsdelivr.net'],
     // Session / user
     samplingPercentage: 100,
   },

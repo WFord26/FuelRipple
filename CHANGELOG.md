@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+---
+
+## [1.1.0-beta.0] - 2026-03-19
+
+### Added (Phase 1 — AAA Data Layer)
 - **AAA National Averages** — new `aaa_national_averages` hypertable stores daily 
   USA-wide average gas prices (regular, mid-grade, premium, diesel) computed from
   per-state AAA data. Includes `state_count` field for data quality tracking. 
@@ -21,6 +25,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   raw `energy_prices`.
 - **Cache TTL Constant** — `CACHE_TTL.AAA_NATIONAL` (24 hours) added to `@fuelripple/shared` 
   to standardize caching for daily update cycles.
+- **AAA National routes** — `GET /api/v1/aaa/national` and `GET /api/v1/aaa/national/latest` 
+  serving daily all-grades national averages (regular, mid-grade, premium, diesel).
+- **Dashboard AAA integration** — Dashboard National Average section replaced with 
+  AAA-sourced data table showing all grades with week/month/3-month/year historical 
+  comparisons and percentage change indicators.
+
+### Added (Phase 2 — Server-Side Pre-computed Metrics)
+- **Price Changes Cache** — new `price_changes_cache` table pre-computes week/month/
+  3-month/year price deltas for every (metric, region) combination. Refreshed after 
+  each EIA ingest so `/prices/changes` is an O(1) key lookup rather than a 
+  multi-point hypertable scan.
+- **AAA National Changes endpoint** — `GET /api/v1/aaa/national/changes` computes 
+  7-day/30-day/90-day/1-year lookbacks server-side from `aaa_national_averages` for 
+  all four grades, returning a compact snapshot. Eliminates the need for the frontend  
+  to download 365 rows to perform four price lookups.
+- **Dashboard payload reduction** — Dashboard now calls `/aaa/national/changes` instead 
+  of fetching 365-row history and looping client-side, reducing the dashboard 
+  initial payload significantly.
 
 ### Optimized
 - **Data Layer Caching** — AAA backfill script now invalidates Redis cache after 

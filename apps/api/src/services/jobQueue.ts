@@ -4,8 +4,8 @@ import { fetchAllGasPrices, fetchDieselPrices, fetchRefineryUtilization, fetchRe
 import { fetchCrudeQuotes } from './marketClient';
 import { fetchEconomicIndicators } from './fredClient';
 import { fetchAllStatePrices } from './aaaClient';
-import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData, refreshMaterializedViews, upsertNationalAverages } from '@fuelripple/db';
-import type { RefineryOperationsRow, CapacityRow, AaaNationalAverageRow } from '@fuelripple/db';
+import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData, refreshMaterializedViews, upsertNationalAverages, upsertLatestPrices, upsertStateAggregates } from '@fuelripple/db';
+import type { RefineryOperationsRow, CapacityRow, AaaNationalAverageRow, AaaStateAggregateRow } from '@fuelripple/db';
 import { EnergyPrice, EconomicIndicator } from '@fuelripple/shared';
 import { abbrToDuoarea } from '../utils/regionMapper';
 
@@ -265,6 +265,7 @@ async function processGasPrices(): Promise<void> {
   console.log(`Prepared ${prices.length} price records for insertion`);
   await insertPrices(prices);
   console.log(`✅ Inserted ${prices.length} gas price records`);
+  await upsertLatestPrices(prices);
   await refreshMaterializedViews();
 }
 
@@ -307,8 +308,7 @@ async function processCrudePrices(): Promise<void> {
 
   if (prices.length > 0) {
     await insertPrices(prices);
-    console.log(`✅ Inserted ${prices.length} crude market price records (WTI: $${wti.price.toFixed(2)}, Brent: $${brent.price.toFixed(2)})`);
-  } else {
+    console.log(`✅ Inserted ${prices.length} crude market price records (WTI: $${wti.price.toFixed(2)}, Brent: $${brent.price.toFixed(2)})`);    await upsertLatestPrices(prices);  } else {
     console.warn('⚠️  No valid crude market prices received');
   }
 }
@@ -339,6 +339,7 @@ async function processDieselPrices(): Promise<void> {
   console.log(`Prepared ${prices.length} diesel price records for insertion`);
   await insertPrices(prices);
   console.log(`✅ Inserted ${prices.length} diesel price records`);
+  await upsertLatestPrices(prices);
   await refreshMaterializedViews();
 }
 
@@ -463,6 +464,7 @@ async function processAAAPrices(): Promise<void> {
   console.log(`Prepared ${prices.length} AAA price records for insertion`);
   await insertPrices(prices);
   console.log(`✅ Inserted ${prices.length} AAA price records`);
+  await upsertLatestPrices(prices);
 
   // Compute and store the daily US nationwide average across all scraped states
   const avg = (vals: number[]) =>
@@ -491,6 +493,21 @@ async function processAAAPrices(): Promise<void> {
     `diesel=$${nationalAvg.diesel?.toFixed(3) ?? 'N/A'} ` +
     `(${nationalAvg.state_count} states)`
   );
+
+  // Store per-state aggregates for fast state-level queries
+  const stateAggs: AaaStateAggregateRow[] = stateData
+    .filter(s => s.regular !== null || s.midGrade !== null || s.premium !== null || s.diesel !== null)
+    .map(s => ({
+      time: today,
+      state: s.state,
+      regular: s.regular,
+      mid_grade: s.midGrade,
+      premium: s.premium,
+      diesel: s.diesel,
+    }));
+
+  await upsertStateAggregates(stateAggs);
+  console.log(`✅ Upserted ${stateAggs.length} state aggregates`);
 
   await refreshMaterializedViews();
 }

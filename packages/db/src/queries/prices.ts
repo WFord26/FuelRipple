@@ -39,7 +39,7 @@ export async function insertPrices(prices: EnergyPrice[]): Promise<void> {
  */
 export async function refreshMaterializedViews(): Promise<void> {
   const knex = getKnex();
-  for (const view of ['daily_prices', 'weekly_prices', 'monthly_prices']) {
+  for (const view of ['daily_prices', 'weekly_prices', 'monthly_prices', 'inventory_statistics_52w']) {
     try {
       await knex.raw(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view};`);
       console.log(`  ✅ ${view} refreshed`);
@@ -76,6 +76,44 @@ export async function getCurrentPrices(metric: string): Promise<any[]> {
       AND time >= NOW() - INTERVAL '4 weeks'
     ORDER BY region, time DESC
   `, [metric]).then(result => result.rows);
+}
+
+/**
+ * Upsert into latest_prices snapshot table.
+ * Maintains current price for each (region, metric) pair in O(1) lookup table.
+ * Called after each price ingestion to keep snapshot up-to-date.
+ */
+export async function upsertLatestPrices(prices: EnergyPrice[]): Promise<void> {
+  if (prices.length === 0) return;
+  const knex = getKnex();
+
+  for (const p of prices) {
+    await knex('latest_prices')
+      .insert({
+        region: p.region,
+        metric: p.metric,
+        value: p.value,
+        time: p.time,
+        source: p.source,
+      })
+      .onConflict(['region', 'metric'])
+      .merge(['value', 'time', 'source']);
+  }
+}
+
+/**
+ * Get latest prices for all regions for a given metric.
+ * Fast O(1) lookup from snapshot table (alternative to hypertable scan).
+ */
+export async function getLatestPricesSnapshot(metric?: string): Promise<any[]> {
+  const knex = getKnex();
+  let query = knex('latest_prices');
+  
+  if (metric) {
+    query = query.where('metric', metric);
+  }
+  
+  return query.select('*').orderBy('region', 'asc');
 }
 
 /**

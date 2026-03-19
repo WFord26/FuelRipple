@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **AAA National Averages** — new `aaa_national_averages` hypertable stores daily 
+  USA-wide average gas prices (regular, mid-grade, premium, diesel) computed from
+  per-state AAA data. Includes `state_count` field for data quality tracking. 
+  Job queue processes daily at 9 AM ET; backfill script `backfill-aaa-national.ts` 
+  computes historical averages from existing per-state data.
+- **Latest Prices Snapshot** — new `latest_prices` table provides O(1) lookup for 
+  current prices by region and metric, eliminating hypertable scans for 
+  `/api/v1/prices/current` endpoint.
+- **AAA State Aggregates** — new `aaa_state_aggregates` table pre-aggregates per-state 
+  AAA prices at the state level, enabling fast state-level queries without scanning 
+  raw `energy_prices`.
+- **Cache TTL Constant** — `CACHE_TTL.AAA_NATIONAL` (24 hours) added to `@fuelripple/shared` 
+  to standardize caching for daily update cycles.
+
+### Optimized
+- **Data Layer Caching** — AAA backfill script now invalidates Redis cache after 
+  upserting to ensure API returns fresh data on next request.
+
 ---
 
 ## [1.0.6] - 2026-03-16

@@ -1,5 +1,8 @@
 import { Knex } from 'knex';
 
+// create_hypertable cannot run inside a transaction block.
+export const config = { transaction: false };
+
 /**
  * Migration: Create aaa_national_averages hypertable
  *

@@ -1,19 +1,22 @@
 import { Knex } from 'knex';
 
+// CREATE MATERIALIZED VIEW ... WITH DATA cannot run inside a transaction block.
+export const config = { transaction: false };
+
 /**
- * Migration: Create TimescaleDB continuous aggregate for inventory statistics
- * 
- * Pre-computes 52-week rolling averages and standard deviations for gasoline/distillate stocks.
- * This eliminates the expensive window function computation on every query, freeing up locks
- * and shared memory on the `refinery_operations` hypertable.
- * 
- * The continuous aggregate automatically refreshes on a background policy.
+ * Migration: Create materialized view for inventory statistics
+ *
+ * Pre-computes 52-week rolling averages and standard deviations for
+ * gasoline/distillate stocks using a standard PostgreSQL materialized view.
+ *
+ * NOTE: timescaledb.continuous aggregates require the Timescale commercial
+ * license and are not available on the Apache-licensed build (Azure PG).
+ * This view is refreshed via REFRESH MATERIALIZED VIEW CONCURRENTLY in
+ * refreshMaterializedViews(), called by the BullMQ workers on each data load.
  */
 export async function up(knex: Knex): Promise<void> {
-  // Create the continuous aggregate view
   await knex.raw(`
-    CREATE MATERIALIZED VIEW IF NOT EXISTS inventory_statistics_52w
-    WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
+    CREATE MATERIALIZED VIEW IF NOT EXISTS inventory_statistics_52w AS
     SELECT
       time,
       region,
@@ -44,41 +47,19 @@ export async function up(knex: Knex): Promise<void> {
         ROWS BETWEEN 51 PRECEDING AND CURRENT ROW
       ) AS distillate_stocks_52w_stddev
     FROM refinery_operations
-    WHERE 
+    WHERE
       gasoline_stocks IS NOT NULL
       AND distillate_stocks IS NOT NULL
+    WITH DATA;
   `);
 
-  // Set up continuous aggregate refresh policy (refresh hourly)
+  // Unique index required for REFRESH MATERIALIZED VIEW CONCURRENTLY
   await knex.raw(`
-    SELECT add_continuous_aggregate_policy(
-      'inventory_statistics_52w',
-      start_offset => INTERVAL '5 days',
-      end_offset => INTERVAL '1 hour',
-      schedule_interval => INTERVAL '1 hour',
-      if_not_exists => TRUE
-    );
-  `);
-
-  // Create indexes for efficient queries
-  await knex.raw(`
-    CREATE INDEX IF NOT EXISTS idx_inventory_stats_region_time
-    ON inventory_statistics_52w (region, time DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_stats_region_time
+    ON inventory_statistics_52w (region, time);
   `);
 }
 
 export async function down(knex: Knex): Promise<void> {
-  // Remove the continuous aggregate policy first
-  await knex.raw(`
-    SELECT remove_continuous_aggregate_policy(
-      'inventory_statistics_52w',
-      if_exists => TRUE,
-      cascade => FALSE
-    );
-  `).catch(() => {
-    // Policy may not exist; ignore error
-  });
-
-  // Drop the materialized view
-  await knex.raw(`DROP MATERIALIZED VIEW IF EXISTS inventory_statistics_52w CASCADE`);
+  await knex.raw(`DROP MATERIALIZED VIEW IF EXISTS inventory_statistics_52w CASCADE;`);
 }

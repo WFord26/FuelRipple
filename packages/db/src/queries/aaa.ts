@@ -41,3 +41,57 @@ export async function getRecentNationalAverages(
     .limit(limit)
     .select<AaaNationalAverageRow[]>('*');
 }
+
+/**
+ * Row type for AAA state-level aggregates
+ */
+export interface AaaStateAggregateRow {
+  time: Date;
+  state: string;
+  regular: number | null;
+  mid_grade: number | null;
+  premium: number | null;
+  diesel: number | null;
+}
+
+/**
+ * Upsert state-level AAA price aggregates.
+ * Replaces raw per-region energy_prices queries for faster state-level access.
+ */
+export async function upsertStateAggregates(
+  rows: AaaStateAggregateRow[]
+): Promise<void> {
+  if (rows.length === 0) return;
+  const knex = getKnex();
+
+  const sorted = [...rows].sort(
+    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+  );
+  const CHUNK = 100;
+
+  for (let i = 0; i < sorted.length; i += CHUNK) {
+    const chunk = sorted.slice(i, i + CHUNK);
+    await knex('aaa_state_aggregates')
+      .insert(chunk)
+      .onConflict(['time', 'state'])
+      .merge(['regular', 'mid_grade', 'premium', 'diesel']);
+  }
+}
+
+/**
+ * Get state aggregates for a specific date.
+ * Used to build regional PADD aggregates and for state-level exports.
+ */
+export async function getStateAggregatesForDate(date: Date): Promise<AaaStateAggregateRow[]> {
+  const knex = getKnex();
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+
+  return knex('aaa_state_aggregates')
+    .where('time', '>=', dayStart)
+    .andWhere('time', '<', dayEnd)
+    .select<AaaStateAggregateRow[]>('*')
+    .orderBy('state', 'asc');
+}

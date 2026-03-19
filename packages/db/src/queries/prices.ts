@@ -101,6 +101,58 @@ export async function upsertLatestPrices(prices: EnergyPrice[]): Promise<void> {
   }
 }
 
+export interface PriceChangesRow {
+  metric: string;
+  region: string;
+  current_price: number | null;
+  week_ago_price: number | null;
+  week_change_pct: number | null;
+  month_ago_price: number | null;
+  month_change_pct: number | null;
+  three_month_ago_price: number | null;
+  three_month_change_pct: number | null;
+  year_ago_price: number | null;
+  year_change_pct: number | null;
+  updated_at?: Date;
+}
+
+/**
+ * Upsert pre-computed price change snapshots into price_changes_cache.
+ * Called by the job queue after each EIA ingest so /prices/changes is O(1).
+ */
+export async function upsertPriceChangesCache(rows: PriceChangesRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  const knex = getKnex();
+  const MERGE_COLS = [
+    'current_price', 'week_ago_price', 'week_change_pct',
+    'month_ago_price', 'month_change_pct',
+    'three_month_ago_price', 'three_month_change_pct',
+    'year_ago_price', 'year_change_pct', 'updated_at',
+  ] as const;
+
+  for (const row of rows) {
+    await knex('price_changes_cache')
+      .insert({ ...row, updated_at: new Date() })
+      .onConflict(['metric', 'region'])
+      .merge(MERGE_COLS);
+  }
+}
+
+/**
+ * Retrieve pre-computed price changes for a given metric + region.
+ * Returns null if the cache has not been populated yet.
+ */
+export async function getPriceChangesFromCache(
+  metric: string,
+  region: string
+): Promise<PriceChangesRow | null> {
+  const knex = getKnex();
+  const row = await knex('price_changes_cache')
+    .where({ metric, region })
+    .first();
+  return row ?? null;
+}
+
 /**
  * Get latest prices for all regions for a given metric.
  * Fast O(1) lookup from snapshot table (alternative to hypertable scan).

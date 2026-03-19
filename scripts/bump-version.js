@@ -51,6 +51,7 @@ const PKG_PATHS = {
 };
 
 const README_PATH = path.join(ROOT, 'README.md');
+const CHANGELOG_PATH = path.join(ROOT, 'CHANGELOG.md');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -136,6 +137,128 @@ function semverCompare(a, b) {
 }
 
 // ---------------------------------------------------------------------------
+// Changelog helpers
+// ---------------------------------------------------------------------------
+
+/** Escape special regex characters in a string. */
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Returns today's date as YYYY-MM-DD. */
+function todayString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Split CHANGELOG.md into an array of text blocks: [preamble, ...sectionParts].
+ * Every section part starts with "## [" and (except the last) ends with "\n\n---\n\n".
+ * Joining all parts produces the original content unchanged.
+ */
+function splitChangelog(content) {
+  return content.split(/(?=^## \[)/m);
+}
+
+/**
+ * For any non-release bump: rename [Unreleased] to [newVersion] - today and
+ * prepend a fresh empty [Unreleased] section above it.
+ * Returns true if the file was (or would be) modified.
+ */
+function changelogBump(newVersion, isDryRun) {
+  const today = todayString();
+  const content = fs.readFileSync(CHANGELOG_PATH, 'utf8');
+  const parts = splitChangelog(content);
+
+  const idx = parts.findIndex(p => /^## \[Unreleased\]/i.test(p));
+  if (idx === -1) {
+    console.log('  CHANGELOG.md: no [Unreleased] section found — skipping.');
+    return false;
+  }
+
+  // Extract the body (everything after the "## [Unreleased]" header line)
+  const unreleasedPart = parts[idx];
+  const body = unreleasedPart.replace(/^## \[Unreleased\][^\n]*\n/, '');
+
+  // Check whether the body has real content (not just a bare separator)
+  const bodyNoSep = body.replace(/\n\n---\n\n$/, '');
+  if (!bodyNoSep.trim()) {
+    console.log('  CHANGELOG.md: [Unreleased] section is empty — skipping.');
+    return false;
+  }
+
+  // Build replacement: fresh empty [Unreleased] + versioned section reusing old body
+  const freshUnreleased = '## [Unreleased]\n\n---\n\n';
+  const newVersionSection = `## [${newVersion}] - ${today}\n${body}`;
+  const newParts = [
+    ...parts.slice(0, idx),
+    freshUnreleased,
+    newVersionSection,
+    ...parts.slice(idx + 1),
+  ];
+
+  if (!isDryRun) {
+    fs.writeFileSync(CHANGELOG_PATH, newParts.join(''), 'utf8');
+  }
+  console.log(`  CHANGELOG.md: [Unreleased] → [${newVersion}] - ${today}`);
+  return true;
+}
+
+/**
+ * For release: find all [newVersion-beta.N] sections, merge their content
+ * (oldest beta first) into a single [newVersion] - today entry, and remove
+ * the individual beta sections.
+ * Returns true if the file was (or would be) modified.
+ */
+function changelogRelease(newVersion, isDryRun) {
+  const today = todayString();
+  const content = fs.readFileSync(CHANGELOG_PATH, 'utf8');
+  const parts = splitChangelog(content);
+
+  const betaRe = new RegExp(`^## \\[${escapeRegex(newVersion)}-beta\\.\\d+\\]`);
+
+  // Collect beta parts with their numeric suffix, sorted oldest-first
+  const betaEntries = [];
+  for (const part of parts) {
+    const m = part.match(new RegExp(`^## \\[${escapeRegex(newVersion)}-beta\\.(\\d+)\\]`));
+    if (m) betaEntries.push({ n: parseInt(m[1], 10), part });
+  }
+
+  if (betaEntries.length === 0) {
+    console.log(`  CHANGELOG.md: no beta sections found for v${newVersion} — skipping.`);
+    return false;
+  }
+
+  betaEntries.sort((a, b) => a.n - b.n);  // ascending → oldest content first
+  const betaNames = betaEntries.map(e => `${newVersion}-beta.${e.n}`);
+
+  // Extract each beta's body: strip header line, trailing separator, and leading blanks
+  const bodies = betaEntries.map(({ part }) =>
+    part
+      .replace(/^## \[[^\]]+\][^\n]*\n/, '')  // strip header line
+      .replace(/\n\n---\n\n$/, '')             // strip trailing separator
+      .replace(/^\n+/, '')                      // strip leading blank lines
+      .trimEnd()
+  ).filter(Boolean);
+
+  const mergedBody = bodies.join('\n\n');
+  const releasePart = mergedBody
+    ? `## [${newVersion}] - ${today}\n\n${mergedBody}\n\n---\n\n`
+    : `## [${newVersion}] - ${today}\n\n---\n\n`;
+
+  // Remove all beta parts, then insert the compiled release entry after [Unreleased]
+  const filteredParts = parts.filter(p => !betaRe.test(p));
+  const unreleasedIdx = filteredParts.findIndex(p => /^## \[Unreleased\]/i.test(p));
+  const insertAt = unreleasedIdx !== -1 ? unreleasedIdx + 1 : 1;
+  filteredParts.splice(insertAt, 0, releasePart);
+
+  if (!isDryRun) {
+    fs.writeFileSync(CHANGELOG_PATH, filteredParts.join(''), 'utf8');
+  }
+  console.log(`  CHANGELOG.md: compiled ${betaNames.join(', ')} → [${newVersion}] - ${today}`);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Parse arguments
 // ---------------------------------------------------------------------------
 const VALID_TYPES = ['patch', 'minor', 'major', 'pre-patch', 'pre-minor', 'pre-major', 'release'];
@@ -208,6 +331,14 @@ if (updatedReadme !== readmeContent) {
   console.log(`  README.md badge → ${highestNew}`);
 }
 
+// Update CHANGELOG.md
+let changelogUpdated = false;
+if (bumpType === 'release') {
+  changelogUpdated = changelogRelease(highestNew, dryRun);
+} else {
+  changelogUpdated = changelogBump(highestNew, dryRun);
+}
+
 // ---------------------------------------------------------------------------
 // Print summary
 // ---------------------------------------------------------------------------
@@ -226,6 +357,7 @@ const relPaths = [
   ...changes.map(c => path.relative(ROOT, c.pkgPath).replace(/\\/g, '/')),
   'package.json',
   'README.md',
+  ...(changelogUpdated ? ['CHANGELOG.md'] : []),
 ];
 
 const commitMsg = bumpType === 'release'

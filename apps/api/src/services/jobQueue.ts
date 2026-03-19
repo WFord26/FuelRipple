@@ -4,8 +4,8 @@ import { fetchAllGasPrices, fetchDieselPrices, fetchRefineryUtilization, fetchRe
 import { fetchCrudeQuotes } from './marketClient';
 import { fetchEconomicIndicators } from './fredClient';
 import { fetchAllStatePrices } from './aaaClient';
-import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData, refreshMaterializedViews, upsertNationalAverages, upsertLatestPrices, upsertStateAggregates } from '@fuelripple/db';
-import type { RefineryOperationsRow, CapacityRow, AaaNationalAverageRow, AaaStateAggregateRow } from '@fuelripple/db';
+import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData, refreshMaterializedViews, upsertNationalAverages, upsertLatestPrices, upsertStateAggregates, upsertPriceChangesCache } from '@fuelripple/db';
+import type { RefineryOperationsRow, CapacityRow, AaaNationalAverageRow, AaaStateAggregateRow, PriceChangesRow } from '@fuelripple/db';
 import { EnergyPrice, EconomicIndicator } from '@fuelripple/shared';
 import { abbrToDuoarea } from '../utils/regionMapper';
 
@@ -240,6 +240,77 @@ function createWorkers(): void {
 /**
  * Process gas prices from EIA
  */
+/**
+ * Build price_changes_cache rows for a given metric after new prices are
+ * inserted. Pulls the unique regions from the provided prices, then for each
+ * region queries the most recent price plus the price from 7/30/90/365 days ago
+ * and upserts the computed deltas.
+ */
+async function buildPriceChangesCache(metric: string, prices: EnergyPrice[]): Promise<void> {
+  try {
+    const { getKnex } = await import('@fuelripple/db');
+    const knex = getKnex();
+    const regions = [...new Set(prices.map(p => p.region))];
+    const rows: PriceChangesRow[] = [];
+
+    for (const region of regions) {
+      const result = await knex.raw<{ rows: any[] }>(`
+        WITH
+          latest AS (
+            SELECT value FROM energy_prices
+            WHERE metric = ? AND region = ?
+            ORDER BY time DESC LIMIT 1
+          ),
+          w7   AS (SELECT value FROM energy_prices WHERE metric = ? AND region = ?
+                    AND time >= NOW() - INTERVAL '8 days' AND time <= NOW() - INTERVAL '6 days'
+                    ORDER BY time DESC LIMIT 1),
+          w30  AS (SELECT value FROM energy_prices WHERE metric = ? AND region = ?
+                    AND time >= NOW() - INTERVAL '31 days' AND time <= NOW() - INTERVAL '29 days'
+                    ORDER BY time DESC LIMIT 1),
+          w90  AS (SELECT value FROM energy_prices WHERE metric = ? AND region = ?
+                    AND time >= NOW() - INTERVAL '91 days' AND time <= NOW() - INTERVAL '89 days'
+                    ORDER BY time DESC LIMIT 1),
+          w365 AS (SELECT value FROM energy_prices WHERE metric = ? AND region = ?
+                    AND time >= NOW() - INTERVAL '366 days' AND time <= NOW() - INTERVAL '364 days'
+                    ORDER BY time DESC LIMIT 1)
+        SELECT
+          (SELECT value FROM latest)  AS cur,
+          (SELECT value FROM w7)      AS p7,
+          (SELECT value FROM w30)     AS p30,
+          (SELECT value FROM w90)     AS p90,
+          (SELECT value FROM w365)    AS p365
+      `, [metric, region, metric, region, metric, region, metric, region, metric, region]);
+
+      const row = result.rows[0];
+      if (!row || row.cur == null) continue;
+
+      const pct = (cur: number, old: number | null) =>
+        old != null && old > 0 ? parseFloat(((cur - old) / old * 100).toFixed(4)) : null;
+
+      rows.push({
+        metric,
+        region,
+        current_price: row.cur,
+        week_ago_price: row.p7,
+        week_change_pct: pct(row.cur, row.p7),
+        month_ago_price: row.p30,
+        month_change_pct: pct(row.cur, row.p30),
+        three_month_ago_price: row.p90,
+        three_month_change_pct: pct(row.cur, row.p90),
+        year_ago_price: row.p365,
+        year_change_pct: pct(row.cur, row.p365),
+      });
+    }
+
+    if (rows.length > 0) {
+      await upsertPriceChangesCache(rows);
+      console.log(`  ✅ price_changes_cache updated for ${rows.length} ${metric} regions`);
+    }
+  } catch (err: any) {
+    console.warn(`  ⚠️  buildPriceChangesCache(${metric}) failed: ${err.message ?? err}`);
+  }
+}
+
 async function processGasPrices(): Promise<void> {
   console.log('Fetching gas prices from EIA...');
   
@@ -266,6 +337,7 @@ async function processGasPrices(): Promise<void> {
   await insertPrices(prices);
   console.log(`✅ Inserted ${prices.length} gas price records`);
   await upsertLatestPrices(prices);
+  await buildPriceChangesCache('gas_regular', prices);
   await refreshMaterializedViews();
 }
 
@@ -340,6 +412,7 @@ async function processDieselPrices(): Promise<void> {
   await insertPrices(prices);
   console.log(`✅ Inserted ${prices.length} diesel price records`);
   await upsertLatestPrices(prices);
+  await buildPriceChangesCache('diesel', prices);
   await refreshMaterializedViews();
 }
 

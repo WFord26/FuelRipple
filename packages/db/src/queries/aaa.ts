@@ -45,6 +45,73 @@ export async function getRecentNationalAverages(
 /**
  * Row type for AAA state-level aggregates
  */
+export interface AaaNationalChangesRow {
+  grade: 'regular' | 'mid_grade' | 'premium' | 'diesel';
+  current_price: number | null;
+  week_ago_price: number | null;
+  week_change_pct: number | null;
+  month_ago_price: number | null;
+  month_change_pct: number | null;
+  three_month_ago_price: number | null;
+  three_month_change_pct: number | null;
+  year_ago_price: number | null;
+  year_change_pct: number | null;
+  as_of: Date;
+}
+
+/**
+ * Compute price changes for all 4 AAA grades by comparing today's national
+ * average against snapshots from 7, 30, 90, and 365 days ago.
+ * Runs a single SQL query and does the math in-database.
+ */
+export async function getAaaNationalChanges(): Promise<AaaNationalChangesRow[]> {
+  const knex = getKnex();
+
+  const result = await knex.raw(`
+    WITH
+      latest AS (
+        SELECT * FROM aaa_national_averages ORDER BY time DESC LIMIT 1
+      ),
+      w7   AS (SELECT * FROM aaa_national_averages
+                WHERE time >= (SELECT time FROM latest) - INTERVAL '7 days'
+                  AND time <= (SELECT time FROM latest) - INTERVAL '6 days'
+                ORDER BY time DESC LIMIT 1),
+      w30  AS (SELECT * FROM aaa_national_averages
+                WHERE time >= (SELECT time FROM latest) - INTERVAL '30 days'
+                  AND time <= (SELECT time FROM latest) - INTERVAL '29 days'
+                ORDER BY time DESC LIMIT 1),
+      w90  AS (SELECT * FROM aaa_national_averages
+                WHERE time >= (SELECT time FROM latest) - INTERVAL '90 days'
+                  AND time <= (SELECT time FROM latest) - INTERVAL '89 days'
+                ORDER BY time DESC LIMIT 1),
+      w365 AS (SELECT * FROM aaa_national_averages
+                WHERE time >= (SELECT time FROM latest) - INTERVAL '365 days'
+                  AND time <= (SELECT time FROM latest) - INTERVAL '364 days'
+                ORDER BY time DESC LIMIT 1)
+    SELECT
+      grade,
+      latest_price                                                    AS current_price,
+      p7                                                              AS week_ago_price,
+      CASE WHEN p7   > 0 THEN ROUND(((latest_price - p7)   / p7   * 100)::numeric, 4) END AS week_change_pct,
+      p30                                                             AS month_ago_price,
+      CASE WHEN p30  > 0 THEN ROUND(((latest_price - p30)  / p30  * 100)::numeric, 4) END AS month_change_pct,
+      p90                                                             AS three_month_ago_price,
+      CASE WHEN p90  > 0 THEN ROUND(((latest_price - p90)  / p90  * 100)::numeric, 4) END AS three_month_change_pct,
+      p365                                                            AS year_ago_price,
+      CASE WHEN p365 > 0 THEN ROUND(((latest_price - p365) / p365 * 100)::numeric, 4) END AS year_change_pct,
+      (SELECT time FROM latest)                                       AS as_of
+    FROM (
+      VALUES
+        ('regular',   (SELECT regular  FROM latest), (SELECT regular  FROM w7),   (SELECT regular  FROM w30),  (SELECT regular  FROM w90),  (SELECT regular  FROM w365)),
+        ('mid_grade', (SELECT mid_grade FROM latest), (SELECT mid_grade FROM w7),  (SELECT mid_grade FROM w30), (SELECT mid_grade FROM w90), (SELECT mid_grade FROM w365)),
+        ('premium',   (SELECT premium  FROM latest), (SELECT premium  FROM w7),   (SELECT premium  FROM w30),  (SELECT premium  FROM w90),  (SELECT premium  FROM w365)),
+        ('diesel',    (SELECT diesel   FROM latest), (SELECT diesel   FROM w7),   (SELECT diesel   FROM w30),  (SELECT diesel   FROM w90),  (SELECT diesel   FROM w365))
+    ) AS t(grade, latest_price, p7, p30, p90, p365)
+  `);
+
+  return result.rows as AaaNationalChangesRow[];
+}
+
 export interface AaaStateAggregateRow {
   time: Date;
   state: string;

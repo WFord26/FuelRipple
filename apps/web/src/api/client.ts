@@ -228,6 +228,20 @@ export interface AaaNationalAverage {
   state_count: number;
 }
 
+export interface AaaNationalChanges {
+  grade: 'regular' | 'mid_grade' | 'premium' | 'diesel';
+  current_price: number | null;
+  week_ago_price: number | null;
+  week_change_pct: number | null;
+  month_ago_price: number | null;
+  month_change_pct: number | null;
+  three_month_ago_price: number | null;
+  three_month_change_pct: number | null;
+  year_ago_price: number | null;
+  year_change_pct: number | null;
+  as_of: string;
+}
+
 /** Latest single-day US national average across all 4 fuel grades */
 export const getAaaNationalLatest = async (): Promise<AaaNationalAverage | null> => {
   const response = await apiClient.get('/aaa/national/latest');
@@ -237,5 +251,11 @@ export const getAaaNationalLatest = async (): Promise<AaaNationalAverage | null>
 /** Recent daily US national averages (default 90 days, newest first) */
 export const getAaaNationalHistory = async (limit = 90): Promise<AaaNationalAverage[]> => {
   const response = await apiClient.get('/aaa/national', { params: { limit } });
+  return response.data.data;
+};
+
+/** Pre-computed 7d/30d/90d/1y price changes for all 4 grades — compact server-side calculation */
+export const getAaaNationalChanges = async (): Promise<AaaNationalChanges[]> => {
+  const response = await apiClient.get('/aaa/national/changes');
   return response.data.data;
 };

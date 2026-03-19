@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { getRecentNationalAverages } from '@fuelripple/db';
+import { getRecentNationalAverages, getAaaNationalChanges } from '@fuelripple/db';
 import { cacheOrFetch } from '../services/cache';
 import { CACHE_TTL } from '@fuelripple/shared';
 
@@ -54,6 +54,30 @@ router.get('/national/latest', async (req: Request, res: Response, next: NextFun
       res.status(404).json({ status: 'error', message: 'No AAA national data available' });
       return;
     }
+
+    res.json({
+      status: 'success',
+      data,
+      source: 'aaa',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/aaa/national/changes
+ * Pre-computed 7d/30d/90d/365d price changes for all 4 grades, calculated
+ * server-side from aaa_national_averages. Compact single-query response — use
+ * this instead of fetching full history and doing lookups on the client.
+ */
+router.get('/national/changes', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await cacheOrFetch(
+      'aaa:national:changes',
+      () => getAaaNationalChanges(),
+      CACHE_TTL.AAA_NATIONAL
+    );
 
     res.json({
       status: 'success',

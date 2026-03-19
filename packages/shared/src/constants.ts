@@ -83,6 +83,7 @@ export const FRED_SERIES = {
 export const CACHE_TTL = {
   WEEKLY_GAS: 24 * 60 * 60,      // 24 hours
   DAILY_CRUDE: 6 * 60 * 60,      // 6 hours
+  AAA_NATIONAL: 24 * 60 * 60,    // 24 hours (updates daily at 9 AM ET)
   HISTORICAL: 7 * 24 * 60 * 60,  // 7 days
   DISRUPTION_SCORE: 60 * 60,      // 1 hour
   DOWNSTREAM: 24 * 60 * 60,       // 24 hours

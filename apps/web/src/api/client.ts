@@ -216,3 +216,26 @@ export const getSupplyCapacity = async (year?: number) => {
 };
 
 export default apiClient;
+
+// ── AAA National Averages ──────────────────────────────────────────────────
+
+export interface AaaNationalAverage {
+  time: string;
+  regular: number | null;
+  mid_grade: number | null;
+  premium: number | null;
+  diesel: number | null;
+  state_count: number;
+}
+
+/** Latest single-day US national average across all 4 fuel grades */
+export const getAaaNationalLatest = async (): Promise<AaaNationalAverage | null> => {
+  const response = await apiClient.get('/aaa/national/latest');
+  return response.data.data;
+};
+
+/** Recent daily US national averages (default 90 days, newest first) */
+export const getAaaNationalHistory = async (limit = 90): Promise<AaaNationalAverage[]> => {
+  const response = await apiClient.get('/aaa/national', { params: { limit } });
+  return response.data.data;
+};

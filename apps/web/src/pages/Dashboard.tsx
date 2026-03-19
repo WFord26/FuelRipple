@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { getCurrentPrices, getDisruptionScore, getTypicalImpact, getRegionalComparison, getPriceChanges, getSupplyHealth, getDownstreamImpact, getVolatility, getEvents, getSupplyInventories, getCurrentCrudePrice, getSeasonalComparison } from '../api/client';
+import { getCurrentPrices, getDisruptionScore, getTypicalImpact, getRegionalComparison, getPriceChanges, getSupplyHealth, getDownstreamImpact, getVolatility, getEvents, getSupplyInventories, getCurrentCrudePrice, getSeasonalComparison, getAaaNationalLatest, getAaaNationalHistory } from '../api/client';
 import DisruptionMeter from '../components/DisruptionMeter';
 import USPriceMap from '../components/USPriceMap';
 import { usePageSEO } from '../hooks/usePageSEO';
@@ -113,6 +113,18 @@ export default function Dashboard() {
     staleTime: 24 * 60 * 60 * 1000,
   });
 
+  const { data: aaaNational } = useQuery({
+    queryKey: ['aaaNationalLatest'],
+    queryFn: getAaaNationalLatest,
+    staleTime: 24 * 60 * 60 * 1000, // updates once daily
+  });
+
+  const { data: aaaHistory } = useQuery({
+    queryKey: ['aaaNationalHistory', 365],
+    queryFn: () => getAaaNationalHistory(365),
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+
   if (pricesLoading || disruptionLoading || impactLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -155,68 +167,81 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* National Average — 5 squares */}
+      {/* National Average — Dynamic based on fuel type */}
       <div>
-        <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">National Average</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {/* Current */}
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 flex flex-col items-center justify-center text-center">
-            <div className="text-xs text-slate-400 mb-1 uppercase tracking-wide">Current</div>
-            <div className="text-2xl font-bold text-white">${nationalPrice?.value.toFixed(3)}</div>
-            <div className="text-xs text-slate-500 mt-0.5">per gallon</div>
-          </div>
+        <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">National Average (AAA) — {fuelType === 'diesel' ? 'Diesel' : 'Gasoline Grades'}</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-700">
+                <th className="text-left px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">Grade</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">Current</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">1 Week Ago</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">Change</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">1 Month Ago</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">Change</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">3 Months Ago</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">Change</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">1 Year Ago</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(fuelType === 'diesel'
+                ? [{ label: 'Diesel', key: 'diesel' as const }]
+                : [
+                    { label: 'Regular', key: 'regular' as const },
+                    { label: 'Mid-Grade', key: 'mid_grade' as const },
+                    { label: 'Premium', key: 'premium' as const },
+                  ]
+              ).map(({ label, key }) => {
+                const findPriceByDaysAgo = (daysAgo: number) => {
+                  if (!aaaHistory) return null;
+                  const targetDate = new Date();
+                  targetDate.setDate(targetDate.getDate() - daysAgo);
+                  const found = aaaHistory.find((d: any) => new Date(d.time).toDateString() === targetDate.toDateString());
+                  return found ? found[key] : null;
+                };
+                const current = aaaNational ? aaaNational[key] : null;
+                const weekAgo = findPriceByDaysAgo(7);
+                const monthAgo = findPriceByDaysAgo(30);
+                const threeMonthAgo = findPriceByDaysAgo(90);
+                const yearAgo = findPriceByDaysAgo(365);
 
-          {/* 1 Week */}
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 flex flex-col items-center justify-center text-center">
-            <div className="text-xs text-slate-400 mb-1 uppercase tracking-wide">1 Week Ago</div>
-            <div className="text-2xl font-bold text-white">
-              {priceChanges?.weekAgoPrice != null ? `$${priceChanges.weekAgoPrice.toFixed(3)}` : '—'}
-            </div>
-            {priceChanges?.weekChangePct != null && (
-              <span className={`mt-1 inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${priceChanges.weekChangePct >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>
-                {priceChanges.weekChangePct >= 0 ? '▲' : '▼'} {Math.abs(priceChanges.weekChangePct).toFixed(2)}%
-              </span>
-            )}
-          </div>
+                const calcChange = (oldPrice: number | null) =>
+                  oldPrice && current ? ((current - oldPrice) / oldPrice) * 100 : null;
 
-          {/* 1 Month */}
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 flex flex-col items-center justify-center text-center">
-            <div className="text-xs text-slate-400 mb-1 uppercase tracking-wide">1 Month Ago</div>
-            <div className="text-2xl font-bold text-white">
-              {priceChanges?.monthAgoPrice != null ? `$${priceChanges.monthAgoPrice.toFixed(3)}` : '—'}
-            </div>
-            {priceChanges?.monthChangePct != null && (
-              <span className={`mt-1 inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${priceChanges.monthChangePct >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>
-                {priceChanges.monthChangePct >= 0 ? '▲' : '▼'} {Math.abs(priceChanges.monthChangePct).toFixed(2)}%
-              </span>
-            )}
-          </div>
+                const weekChange = calcChange(weekAgo);
+                const monthChange = calcChange(monthAgo);
+                const threeMonthChange = calcChange(threeMonthAgo);
+                const yearChange = calcChange(yearAgo);
 
-          {/* 3 Month */}
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 flex flex-col items-center justify-center text-center">
-            <div className="text-xs text-slate-400 mb-1 uppercase tracking-wide">3 Months Ago</div>
-            <div className="text-2xl font-bold text-white">
-              {priceChanges?.threeMonthAgoPrice != null ? `$${priceChanges.threeMonthAgoPrice.toFixed(3)}` : '—'}
-            </div>
-            {priceChanges?.threeMonthChangePct != null && (
-              <span className={`mt-1 inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${priceChanges.threeMonthChangePct >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>
-                {priceChanges.threeMonthChangePct >= 0 ? '▲' : '▼'} {Math.abs(priceChanges.threeMonthChangePct).toFixed(2)}%
-              </span>
-            )}
-          </div>
+                const ChangeCell = ({ pct }: { pct: number | null }) =>
+                  pct != null ? (
+                    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded ${pct >= 0 ? 'bg-red-900/40 text-red-300' : 'bg-green-900/40 text-green-300'}`}>
+                      {pct >= 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(2)}%
+                    </span>
+                  ) : (
+                    <span className="text-slate-600">—</span>
+                  );
 
-          {/* 1 Year */}
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 flex flex-col items-center justify-center text-center">
-            <div className="text-xs text-slate-400 mb-1 uppercase tracking-wide">1 Year Ago</div>
-            <div className="text-2xl font-bold text-white">
-              {priceChanges?.yearAgoPrice != null ? `$${priceChanges.yearAgoPrice.toFixed(3)}` : '—'}
-            </div>
-            {priceChanges?.yearChangePct != null && (
-              <span className={`mt-1 inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${priceChanges.yearChangePct >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>
-                {priceChanges.yearChangePct >= 0 ? '▲' : '▼'} {Math.abs(priceChanges.yearChangePct).toFixed(2)}%
-              </span>
-            )}
-          </div>
+                return (
+                  <tr key={key} className="border-b border-slate-700/50 hover:bg-slate-800/30 transition-colors">
+                    <td className="px-3 py-2 text-slate-300 font-medium">{label}</td>
+                    <td className="text-center px-3 py-2 text-white font-semibold">{current != null ? `$${current.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2 text-slate-300">{weekAgo != null ? `$${weekAgo.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2"><ChangeCell pct={weekChange} /></td>
+                    <td className="text-center px-3 py-2 text-slate-300">{monthAgo != null ? `$${monthAgo.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2"><ChangeCell pct={monthChange} /></td>
+                    <td className="text-center px-3 py-2 text-slate-300">{threeMonthAgo != null ? `$${threeMonthAgo.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2"><ChangeCell pct={threeMonthChange} /></td>
+                    <td className="text-center px-3 py-2 text-slate-300">{yearAgo != null ? `$${yearAgo.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2"><ChangeCell pct={yearChange} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 

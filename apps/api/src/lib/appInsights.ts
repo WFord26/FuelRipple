@@ -14,7 +14,7 @@
  * Use `trackEvent / trackException / trackMetric` for manual telemetry.
  */
 
-import appInsightsModule from 'applicationinsights';
+import * as appInsightsModule from 'applicationinsights';
 
 let started = false;
 

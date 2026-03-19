@@ -21,6 +21,7 @@ import eventsRouter from './routes/events';
 import adminRouter from './routes/admin';
 import supplyRouter from './routes/supply';
 import llmRouter from './routes/llm';
+import aaaRouter from './routes/aaa';
 import { errorHandler } from './middleware/errorHandler';
 import { initializeCache } from './services/cache';
 import { initializeJobQueue } from './services/jobQueue';
@@ -92,6 +93,7 @@ app.use('/api/v1/events', eventsRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/supply', supplyRouter);
 app.use('/api/v1/llm', llmRouter);
+app.use('/api/v1/aaa', aaaRouter);
 
 // Error handling
 app.use(errorHandler);

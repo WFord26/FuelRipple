@@ -80,3 +80,19 @@ export const FuelCostOutputSchema = z.object({
 });
 
 export type FuelCostOutput = z.infer<typeof FuelCostOutputSchema>;
+// Blog Post Metadata Schema
+export const BlogPostMetaSchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  description: z.string(),
+  publishedAt: z.string(),           // ISO date string
+  updatedAt: z.string().optional(),
+  author: z.string().default('FuelRipple'),
+  tags: z.array(z.string()),
+  seoKeywords: z.array(z.string()),
+  canonicalPath: z.string(),         // e.g. /blog/padd-regions-explained
+  readingMinutes: z.number(),
+  featuredImage: z.string().optional(),
+});
+
+export type BlogPostMeta = z.infer<typeof BlogPostMetaSchema>;

@@ -1,6 +1,14 @@
 User-agent: *
 Allow: /
-Disallow: /api/
 
-# Sitemap
-Sitemap: https://fuelripple.com/sitemap.xml
+# Block API endpoints from indexing
+Disallow: /api/
+Disallow: /embed/
+Disallow: /health
+
+# Block query-string variants that would create duplicate content
+Disallow: /*?utm_*
+Disallow: /*?theme=*
+Disallow: /*?region=*&*
+
+Sitemap: https://www.fuelripple.com/sitemap.xml

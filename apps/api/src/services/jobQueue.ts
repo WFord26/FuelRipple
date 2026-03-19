@@ -4,8 +4,8 @@ import { fetchAllGasPrices, fetchDieselPrices, fetchRefineryUtilization, fetchRe
 import { fetchCrudeQuotes } from './marketClient';
 import { fetchEconomicIndicators } from './fredClient';
 import { fetchAllStatePrices } from './aaaClient';
-import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData, refreshMaterializedViews } from '@fuelripple/db';
-import type { RefineryOperationsRow, CapacityRow } from '@fuelripple/db';
+import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData, refreshMaterializedViews, upsertNationalAverages } from '@fuelripple/db';
+import type { RefineryOperationsRow, CapacityRow, AaaNationalAverageRow } from '@fuelripple/db';
 import { EnergyPrice, EconomicIndicator } from '@fuelripple/shared';
 import { abbrToDuoarea } from '../utils/regionMapper';
 
@@ -463,6 +463,35 @@ async function processAAAPrices(): Promise<void> {
   console.log(`Prepared ${prices.length} AAA price records for insertion`);
   await insertPrices(prices);
   console.log(`✅ Inserted ${prices.length} AAA price records`);
+
+  // Compute and store the daily US nationwide average across all scraped states
+  const avg = (vals: number[]) =>
+    vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+
+  const regulars  = stateData.map(s => s.regular).filter((v): v is number => v !== null);
+  const midGrades = stateData.map(s => s.midGrade).filter((v): v is number => v !== null);
+  const premiums  = stateData.map(s => s.premium).filter((v): v is number => v !== null);
+  const diesels   = stateData.map(s => s.diesel).filter((v): v is number => v !== null);
+
+  const nationalAvg: AaaNationalAverageRow = {
+    time: today,
+    regular:   avg(regulars),
+    mid_grade: avg(midGrades),
+    premium:   avg(premiums),
+    diesel:    avg(diesels),
+    state_count: regulars.length,
+  };
+
+  await upsertNationalAverages([nationalAvg]);
+  console.log(
+    `✅ National average upserted for ${today.toISOString().split('T')[0]}: ` +
+    `regular=$${nationalAvg.regular?.toFixed(3) ?? 'N/A'} ` +
+    `mid=$${nationalAvg.mid_grade?.toFixed(3) ?? 'N/A'} ` +
+    `premium=$${nationalAvg.premium?.toFixed(3) ?? 'N/A'} ` +
+    `diesel=$${nationalAvg.diesel?.toFixed(3) ?? 'N/A'} ` +
+    `(${nationalAvg.state_count} states)`
+  );
+
   await refreshMaterializedViews();
 }
 

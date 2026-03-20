@@ -193,8 +193,6 @@ export async function getAaaStateHistory(
     .limit(limit)
     .select<AaaStateAggregateRow[]>('*');
 
-  console.log(`[DB] getAaaStateHistory(${state}, limit=${limit}) -> upperState=${upperState}, returned ${result.length} records`);
-  
   return result;
 }
 

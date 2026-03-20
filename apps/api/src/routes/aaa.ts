@@ -177,8 +177,6 @@ router.get('/state/:abbr', async (req: Request, res: Response, next: NextFunctio
       CACHE_TTL.AAA_NATIONAL
     );
 
-    console.log(`[DEBUG /state/:abbr] abbr=${abbr}, limit=${limit}, returned ${data.length} records`);
-
     res.json({
       status: 'success',
       data,
@@ -216,45 +214,6 @@ router.get('/state/:abbr/changes', async (req: Request, res: Response, next: Nex
     });
   } catch (error) {
     next(error);
-  }
-});
-
-// DEBUG: Check raw historical data  
-router.get('/debug/state/:abbr', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { abbr } = req.params;
-    const { getKnex } = await import('@fuelripple/db');
-    const knex = getKnex();
-    const data = await knex('aaa_state_aggregates')
-      .where('state', abbr.toUpperCase())
-      .orderBy('time', 'desc')
-      .limit(5)
-      .select('*');
-    res.json({
-      status: 'success',
-      state: abbr.toUpperCase(),
-      total_like_state: (await knex('aaa_state_aggregates').where('state', abbr.toUpperCase())).length,
-      sample: data,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// TEMP TEST: Direct function call test
-router.get('/test/state-history/:abbr', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { abbr } = req.params;
-    const data = await getAaaStateHistory(abbr, 10);
-    res.json({
-      status: 'success',
-      abbr,
-      test: 'direct function call',
-      data_length: data.length,
-      data: data.slice(0, 2),
-    });
-  } catch (error) {
-    res.status(500).json({ error: String(error) });
   }
 });
 

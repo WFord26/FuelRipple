@@ -481,8 +481,16 @@ async function processAAAPrices(): Promise<void> {
 
   const stateData = await fetchAllStatePrices();
   const prices: EnergyPrice[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+  // Clear any stale same-day records before inserting (prevents duplicate-timestamp
+  // conflicts if the job runs more than once in a day or after a local-midnight record)
+  const { getKnex } = await import('@fuelripple/db');
+  const knex = getKnex();
+  await knex('aaa_state_aggregates')
+    .whereRaw(`time::date = ?::date`, [today.toISOString()])
+    .delete();
 
   for (const sp of stateData) {
     const duoarea = abbrToDuoarea(sp.state);

@@ -119,10 +119,14 @@ async function main(): Promise<void> {
 
     for (const row of rawData) {
       const stateAbbr = duoareaToAbbr(row.region);
-      const key = `${row.time}|${stateAbbr}`;
+      // Normalize to UTC midnight so wayback rows (T12:00:00Z) and live AAA rows
+      // (T00:00:00Z) land on the same key and properly overwrite seed data.
+      const raw = new Date(row.time);
+      const midnight = new Date(Date.UTC(raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate()));
+      const key = `${midnight.toISOString()}|${stateAbbr}`;
       if (!stateMap.has(key)) {
         stateMap.set(key, {
-          time: new Date(row.time),
+          time: midnight,
           state: stateAbbr,
           regular: null,
           mid_grade: null,

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.1.0-beta.1] - 2026-03-20
+
 ### Added
 - **Wayback Machine historical backfill** — new script `apps/api/src/scripts/backfill-aaa-wayback.ts`
   recovers state-level AAA gas prices from Internet Archive snapshots of
@@ -70,6 +74,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [1.1.0-beta.0] - 2026-03-19
+
+### Added (Phase 0 — Blog & Footer)
+- **Version display in footer** — frontend and backend versions now displayed in the site 
+  footer, pulled from respective `package.json` files:
+  - *Frontend*: version injected at build time by Vite (`__APP_VERSION__` global from 
+    `apps/web/package.json`)
+  - *API*: version endpoint `/api/v1/health` returns API version from 
+    `apps/api/package.json` with 1-hour cache TTL
+  - *Frontend hook*: `useApiVersion()` fetches API version using TanStack Query for 
+    client-side display in Layout footer
+- **Blog article visualizations** — five existing blog articles enhanced with interactive
+  charts, data tables, and callout boxes:
+  - `ArticleChart` component — responsive Recharts-based bar/line charts with
+    multi-series support and auto-assigned color palette; exported from
+    `apps/web/src/content/components/ArticleChart.tsx`
+  - `ArticleTable` component — styled data table accepting `headers` + `rows`
+    (keyed objects matching header strings exactly); co-located in the same file
+  - `ArticleCallout` component — color-coded info/warning/tip highlight boxes;
+    co-located in the same file
+  - All components registered in `apps/web/src/content/components/index.tsx` for
+    MDX provider and available via named import in each `.mdx` file
+  - *rockets-and-feathers*: asymmetry visualization bar chart + household cost
+    impact table
+  - *why-gas-prices-spike-refineries*: PADD supply profile table + West Coast
+    outage history table + callouts
+  - *padd-regions-explained*: PADD premium bar chart (West Coast vs. national)
+    + regional inequality callout
+  - *2022-energy-crisis-geopolitics*: PADD regional price impact table + timeline
+      callouts
+  - *monthly-fuel-cost-tracker*: budget scenario table + disruption index line
+    chart + tip callouts
 
 
 ### Added (Phase 1 — AAA Data Layer)

@@ -16,6 +16,7 @@
     "backfill-aaa-national": "tsx --env-file=../../.env src/scripts/backfill-aaa-national.ts",
     "backfill-aaa-state": "tsx --env-file=../../.env src/scripts/backfill-aaa-state.ts",
     "backfill-aaa-state-changes": "tsx --env-file=../../.env src/scripts/backfill-aaa-state-changes.ts",
+    "backfill-aaa-padd": "tsx --env-file=../../.env src/scripts/backfill-aaa-padd.ts",
     "fetch-aaa-today": "tsx --env-file=../../.env src/scripts/fetch-aaa-today.ts",
     "download-crude": "tsx --env-file=../../.env src/scripts/download-crude.ts",
     "scrape-aaa": "tsx src/scripts/scrape-aaa-history.ts",

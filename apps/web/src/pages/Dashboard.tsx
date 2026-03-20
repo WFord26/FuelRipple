@@ -583,7 +583,7 @@ export default function Dashboard() {
       )}
 
       {/* Regional Breakdown */}
-      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 overflow-hidden">
         <h3 className="text-xl font-bold text-white mb-2">Regional Prices</h3>
         <p className="text-xs text-slate-500 mb-4">Click a state for detailed breakdown</p>
         <USPriceMap comparisonData={comparisonData ?? []} height={380} onStateClick={(abbr) => navigate(`/state/${abbr}`)} />

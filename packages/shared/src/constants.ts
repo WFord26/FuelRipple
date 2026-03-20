@@ -79,6 +79,79 @@ export const FRED_SERIES = {
   GAS_REGULAR_WEEKLY: 'GASREGW',
 } as const;
 
+/**
+ * Source priority for price data. Higher numbers = higher priority.
+ * AAA is preferred for retail gas prices (daily, state-level granularity).
+ * EIA is fallback for historical/weekly aggregate data.
+ * Used to resolve conflicts when multiple sources have the same (region, metric).
+ */
+export const SOURCE_PRIORITY: Record<string, number> = {
+  aaa: 100,            // AAA: retail gas prices (daily, all states)
+  aaa_wayback: 95,     // AAA historical (Wayback archive)
+  eia: 50,             // EIA: weekly aggregates, PADD regions
+  fred: 40,            // FRED: secondary crude, economic indicators
+  market: 30,          // Market data (Yahoo Finance)
+} as const;
+
+/**
+ * 2020 US Census population by state abbreviation.
+ * Used for population-weighted PADD regional price aggregates.
+ * Source: US Census Bureau, 2020 Decennial Census P1 Table.
+ */
+export const STATE_POPULATIONS: Record<string, number> = {
+  AL: 5_024_279,
+  AK:   733_391,
+  AZ: 7_151_502,
+  AR: 3_011_524,
+  CA: 39_538_223,
+  CO: 5_773_714,
+  CT: 3_605_944,
+  DC:   689_545,
+  DE:   989_948,
+  FL: 21_538_187,
+  GA: 10_711_908,
+  HI: 1_455_271,
+  ID: 1_839_106,
+  IL: 12_812_508,
+  IN: 6_785_528,
+  IA: 3_190_369,
+  KS: 2_937_880,
+  KY: 4_505_836,
+  LA: 4_657_757,
+  ME: 1_362_359,
+  MD: 6_177_224,
+  MA: 7_029_917,
+  MI: 10_077_331,
+  MN: 5_706_494,
+  MS: 2_961_279,
+  MO: 6_154_913,
+  MT: 1_084_225,
+  NE: 1_961_504,
+  NV: 3_104_614,
+  NH: 1_377_529,
+  NJ: 9_288_994,
+  NM: 2_117_522,
+  NY: 20_201_249,
+  NC: 10_439_388,
+  ND:   779_094,
+  OH: 11_799_448,
+  OK: 3_959_353,
+  OR: 4_237_256,
+  PA: 13_002_700,
+  RI: 1_097_379,
+  SC: 5_118_425,
+  SD:   886_667,
+  TN: 6_910_840,
+  TX: 29_145_505,
+  UT: 3_271_616,
+  VT:   643_077,
+  VA: 8_631_393,
+  WA: 7_705_281,
+  WV: 1_793_716,
+  WI: 5_893_718,
+  WY:   576_851,
+} as const;
+
 // Cache TTL values (in seconds)
 export const CACHE_TTL = {
   WEEKLY_GAS: 24 * 60 * 60,      // 24 hours

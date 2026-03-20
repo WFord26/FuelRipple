@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **AAA-derived PADD regional aggregates** — daily PADD-level gas price data computed
+  from existing per-state AAA data, replacing the need for weekly EIA regional series:
+  - New table `aaa_padd_aggregates` (TimescaleDB hypertable, 30-day chunks) stores two
+    aggregation methods for every grade (regular, mid-grade, premium, diesel) per PADD
+    region per day:
+    - `*_mean` — simple arithmetic mean across all reporting states in the region
+    - `*_wtd` — population-weighted mean using 2020 US Census state populations, so
+      high-population states (CA, TX, FL) carry their proportional weight
+  - `STATE_POPULATIONS` constant added to `@fuelripple/shared` (2020 Census data for
+    all 50 states + DC), used for weighting in both the job queue and backfill script
+  - Job queue (`processAAAPrices`) now computes and upserts PADD aggregates immediately
+    after the daily state aggregate pass — all 5 regions updated daily at 9 AM ET
+  - New DB query helpers: `upsertPaddAggregates`, `getAaaPaddLatest`,
+    `getAaaPaddHistory`, `getAllAaaPaddLatest` (exported from `@fuelripple/db`)
+  - Three new API endpoints:
+    - `GET /api/v1/aaa/regions` — latest row for all 5 PADD regions
+    - `GET /api/v1/aaa/region/:padd/latest` — latest row for a single region
+    - `GET /api/v1/aaa/region/:padd` — historical rows (default 90 days, max 365)
+    - All endpoints return both `*_mean` and `*_wtd` columns; cached 24 hours
+  - Backfill script `apps/api/src/scripts/backfill-aaa-padd.ts` computes PADD
+    aggregates from all existing `aaa_state_aggregates` data in one pass:
+    - CLI flags: `--start`, `--end`, `--dry-run`
+    - Registered as `npm run --workspace=@fuelripple/api backfill-aaa-padd`
+  - Migration: `packages/db/migrations/20260320000001_create_aaa_padd_aggregates.ts`
+- **Regional price comparison page** (`apps/web/src/pages/Comparison.tsx`) refactored
+  to showcase all 4 fuel grades across all 5 PADD regions using daily AAA data:
+  - Four-button toggle selects individual grade (Regular, Mid-Grade, Premium, Diesel)
+  - Dual-method selector switches between `*_mean` and `*_wtd` (population-weighted)
+    aggregations on the fly — updates all regional data simultaneously
+  - Summary cards display National Average, Price Range (min–max spread), and Price
+    Variance (%) calculated across the 5 PADD values for the selected grade+method
+  - Interactive bar chart ranks all 5 PADDs by price for the selected metric
+  - US state choropleth map displays each state colored by its individual regular gas
+    price; PADD region borders overlaid; click any state to navigate to its detail page
+  - Collapsible PADD region cards show per-region price (`$X.XXX`), percentage vs
+    national average (`±Y.Z%`), and a sortable list of all states in that PADD with
+    individual prices (states without AAA reporting marked "no data"); click any state
+    to detail page
+  - Regional insights panel explains why certain regions systematically run hot/cold
+    (e.g., Gulf Coast refining capacity, West Coast blend requirements, Rocky Mountain
+    transport costs)
+- **AAA data freshness enhancements** — improved scraper reliability and comprehensive
+  architectural documentation:
+  - New scraper module `apps/api/src/services/aaaClientV2.ts` delivering:
+    - Parallel batch requests (max 5 concurrent) replacing sequential calls for ~5x
+      faster completion
+    - Exponential backoff retry logic with configurable attempt counts (3 morning, 2
+      intraday)
+    - Multiple HTML parsing strategies with fallback to regex text-match; handles
+      historical layout changes on the AAA site
+    - Automatic early termination if success rate drops below 60% to prevent rate
+      limiting
+    - Comprehensive metrics tracking: total time, per-state average, per-request
+      average
+  - Optional **intraday scraping** at 4 PM ET (weekdays) via `AAA_INTRADAY_ENABLED=true`
+    in `.env`; allows tracking mid-day price changes for high-volatility scenarios
+  - Comprehensive new **`docs/AAA_DATA_INTEGRATION.md`** reference guide covering:
+    - Architecture layer (scraper → DB → cache → API)
+    - Schedule and SLAs (daily 9 AM ET primary, optional 4 PM ET intraday)
+    - Data quality metrics (`state_count` tracking success rate)
+    - Limitations (stale cache behavior on Wayback fallback, weekday-only intraday)
+    - Test strategy and local development instructions
+
+### Changed
+- **Job queue `processAAAPrices()`** now invokes `aaaClientV2` instead of `aaaClient`
+  for improved concurrency and resilience
+
 ---
 
 ## [1.1.0-beta.1] - 2026-03-20

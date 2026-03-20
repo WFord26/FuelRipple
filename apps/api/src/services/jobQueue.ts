@@ -4,9 +4,9 @@ import { fetchAllGasPrices, fetchDieselPrices, fetchRefineryUtilization, fetchRe
 import { fetchCrudeQuotes } from './marketClient';
 import { fetchEconomicIndicators } from './fredClient';
 import { fetchAllStatePrices } from './aaaClient';
-import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData, refreshMaterializedViews, upsertNationalAverages, upsertLatestPrices, upsertStateAggregates, upsertPriceChangesCache } from '@fuelripple/db';
-import type { RefineryOperationsRow, CapacityRow, AaaNationalAverageRow, AaaStateAggregateRow, PriceChangesRow } from '@fuelripple/db';
-import { EnergyPrice, EconomicIndicator } from '@fuelripple/shared';
+import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData, refreshMaterializedViews, upsertNationalAverages, upsertLatestPrices, upsertStateAggregates, upsertPriceChangesCache, upsertPaddAggregates } from '@fuelripple/db';
+import type { RefineryOperationsRow, CapacityRow, AaaNationalAverageRow, AaaStateAggregateRow, AaaPaddAggregateRow, PriceChangesRow } from '@fuelripple/db';
+import { EnergyPrice, EconomicIndicator, PADD_REGIONS, STATE_POPULATIONS } from '@fuelripple/shared';
 import { abbrToDuoarea } from '../utils/regionMapper';
 
 export let dataQueue: Queue | null = null;
@@ -126,8 +126,8 @@ async function scheduleJobs(): Promise<void> {
     },
   });
 
-  // AAA state prices - daily at 9AM ET (published each morning)
-  await dataQueue.upsertJobScheduler('aaa-state-daily', {
+  // AAA state prices - 9AM ET (morning update - published each morning)
+  await dataQueue.upsertJobScheduler('aaa-state-morning', {
     pattern: '0 9 * * *',
   }, {
     name: 'fetch-aaa-prices',
@@ -140,6 +140,25 @@ async function scheduleJobs(): Promise<void> {
       },
     },
   });
+
+  // AAA state prices - 4PM ET (intraday update for real-time tracking)
+  // NOTE: Can be enabled/disabled via AAA_INTRADAY_ENABLED env var
+  if (process.env.AAA_INTRADAY_ENABLED === 'true') {
+    await dataQueue.upsertJobScheduler('aaa-state-intraday', {
+      pattern: '0 16 * * 1-5', // Weekdays only, 4PM ET
+    }, {
+      name: 'fetch-aaa-prices',
+      data: { type: 'aaa', priority: 'intraday' },
+      opts: {
+        attempts: 2,
+        backoff: {
+          type: 'exponential',
+          delay: 8000,
+        },
+      },
+    });
+    console.log('ℹ️  AAA intraday scraping enabled (4PM ET)');
+  }
 
   // EIA refinery/supply data - Monday 6PM ET (same WPSR release as gas prices)
   await dataQueue.upsertJobScheduler('eia-refinery-weekly', {
@@ -589,6 +608,58 @@ async function processAAAPrices(): Promise<void> {
 
   await upsertStateAggregates(stateAggs);
   console.log(`✅ Upserted ${stateAggs.length} state aggregates`);
+
+  // Compute PADD regional aggregates (simple mean + population-weighted mean)
+  const PADD_CODE_TO_REGION = {
+    R10: PADD_REGIONS.PADD1,
+    R20: PADD_REGIONS.PADD2,
+    R30: PADD_REGIONS.PADD3,
+    R40: PADD_REGIONS.PADD4,
+    R50: PADD_REGIONS.PADD5,
+  } as const;
+
+  const paddAggs: AaaPaddAggregateRow[] = [];
+  for (const [paddCode, region] of Object.entries(PADD_CODE_TO_REGION)) {
+    const statesInPadd = stateAggs.filter(s => (region.states as readonly string[]).includes(s.state));
+    const grades = ['regular', 'mid_grade', 'premium', 'diesel'] as const;
+    type GradeKey = typeof grades[number];
+
+    const agg: AaaPaddAggregateRow = {
+      time: today,
+      padd: paddCode,
+      regular_mean:   null,
+      mid_grade_mean: null,
+      premium_mean:   null,
+      diesel_mean:    null,
+      regular_wtd:    null,
+      mid_grade_wtd:  null,
+      premium_wtd:    null,
+      diesel_wtd:     null,
+      state_count: statesInPadd.length,
+    };
+
+    for (const grade of grades) {
+      const withPrices = statesInPadd.filter(s => s[grade as GradeKey] !== null);
+      if (withPrices.length === 0) continue;
+
+      const prices = withPrices.map(s => s[grade as GradeKey] as number);
+      (agg as any)[`${grade}_mean`] = prices.reduce((a, b) => a + b, 0) / prices.length;
+
+      let weightedSum = 0;
+      let totalWeight = 0;
+      for (const s of withPrices) {
+        const pop = STATE_POPULATIONS[s.state] ?? 0;
+        weightedSum += (s[grade as GradeKey] as number) * pop;
+        totalWeight += pop;
+      }
+      if (totalWeight > 0) (agg as any)[`${grade}_wtd`] = weightedSum / totalWeight;
+    }
+
+    paddAggs.push(agg);
+  }
+
+  await upsertPaddAggregates(paddAggs);
+  console.log(`✅ Upserted ${paddAggs.length} PADD aggregates`);
 
   await refreshMaterializedViews();
 }

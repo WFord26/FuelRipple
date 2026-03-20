@@ -333,3 +333,32 @@ export const getAaaStateChanges = async (abbr: string): Promise<AaaStateChanges[
   const response = await apiClient.get(`/aaa/state/${abbr}/changes`);
   return response.data.data;
 };
+
+// ── AAA PADD Regional Aggregates ──────────────────────────────────────────
+
+export interface AaaPaddAggregate {
+  padd: string;
+  name: string;    // injected by the route handler
+  time: string;
+  regular_mean:   number | null;
+  mid_grade_mean: number | null;
+  premium_mean:   number | null;
+  diesel_mean:    number | null;
+  regular_wtd:    number | null;
+  mid_grade_wtd:  number | null;
+  premium_wtd:    number | null;
+  diesel_wtd:     number | null;
+  state_count:    number;
+}
+
+/** Latest AAA-derived PADD aggregates for all 5 regions — all 4 grades, mean + pop-weighted */
+export const getAaaPaddRegions = async (): Promise<AaaPaddAggregate[]> => {
+  const response = await apiClient.get('/aaa/regions');
+  return response.data.data;
+};
+
+/** Latest AAA-derived PADD aggregate for a single region */
+export const getAaaPaddRegion = async (padd: string): Promise<AaaPaddAggregate | null> => {
+  const response = await apiClient.get(`/aaa/region/${padd}/latest`);
+  return response.data.data;
+};

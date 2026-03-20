@@ -1,6 +1,6 @@
 import { Knex } from 'knex';
 import { getKnex } from '../index';
-import { EnergyPrice } from '@fuelripple/shared';
+import { EnergyPrice, SOURCE_PRIORITY } from '@fuelripple/shared';
 
 /**
  * Insert energy prices with deduplication.
@@ -69,35 +69,63 @@ export async function getCurrentPrices(metric: string): Promise<any[]> {
   // Limit scan to recent 4 weeks to avoid locking every hypertable chunk.
   // energy_prices is partitioned on `time`; an unbounded scan exhausts
   // max_locks_per_transaction on Azure PG Flexible Server.
-  return knex.raw(`
-    SELECT DISTINCT ON (region) region, value, time
+  // Prioritizes AAA over EIA for gas prices.
+  const result = await knex.raw(`
+    SELECT DISTINCT ON (region) region, metric, value, time, source
     FROM energy_prices
     WHERE metric = ?
       AND time >= NOW() - INTERVAL '4 weeks'
-    ORDER BY region, time DESC
-  `, [metric]).then(result => result.rows);
+    ORDER BY region,
+      CASE source
+        WHEN 'aaa' THEN 100
+        WHEN 'aaa_wayback' THEN 95
+        WHEN 'eia' THEN 50
+        WHEN 'fred' THEN 40
+        WHEN 'market' THEN 30
+        ELSE 0
+      END DESC,
+      time DESC
+  `, [metric]);
+  
+  return Array.isArray(result) ? result : (result.rows ?? []);
 }
 
 /**
  * Upsert into latest_prices snapshot table.
  * Maintains current price for each (region, metric) pair in O(1) lookup table.
  * Called after each price ingestion to keep snapshot up-to-date.
+ * 
+ * IMPORTANT: Respects SOURCE_PRIORITY to avoid lower-priority sources overwriting
+ * higher-priority ones. AAA (priority 100) will never be overwritten by EIA (priority 50).
  */
 export async function upsertLatestPrices(prices: EnergyPrice[]): Promise<void> {
   if (prices.length === 0) return;
   const knex = getKnex();
 
   for (const p of prices) {
-    await knex('latest_prices')
-      .insert({
-        region: p.region,
-        metric: p.metric,
-        value: p.value,
-        time: p.time,
-        source: p.source,
-      })
-      .onConflict(['region', 'metric'])
-      .merge(['value', 'time', 'source']);
+    // Get current row to check priority
+    const existing = await knex('latest_prices')
+      .where('region', p.region)
+      .where('metric', p.metric)
+      .first();
+    
+    // Get priority for incoming vs existing source
+    const incomingPriority = SOURCE_PRIORITY[p.source as keyof typeof SOURCE_PRIORITY] ?? 0;
+    const existingPriority = existing ? (SOURCE_PRIORITY[(existing.source as keyof typeof SOURCE_PRIORITY)] ?? 0) : 0;
+    
+    // Only update if incoming source has higher priority, or no existing data
+    if (!existing || incomingPriority >= existingPriority) {
+      await knex('latest_prices')
+        .insert({
+          region: p.region,
+          metric: p.metric,
+          value: p.value,
+          time: p.time,
+          source: p.source,
+        })
+        .onConflict(['region', 'metric'])
+        .merge(['value', 'time', 'source']);
+    }
   }
 }
 
@@ -156,16 +184,34 @@ export async function getPriceChangesFromCache(
 /**
  * Get latest prices for all regions for a given metric.
  * Fast O(1) lookup from snapshot table (alternative to hypertable scan).
+ * Prefers AAA over EIA by weight source priority in the query.
  */
 export async function getLatestPricesSnapshot(metric?: string): Promise<any[]> {
   const knex = getKnex();
-  let query = knex('latest_prices');
   
-  if (metric) {
-    query = query.where('metric', metric);
-  }
+  let query = `
+    SELECT DISTINCT ON (region, metric) 
+      region, metric, value, time, source
+    FROM latest_prices
+    ${metric ? 'WHERE metric = ?' : ''}
+    ORDER BY region, metric,
+      CASE source
+        WHEN 'aaa' THEN 100
+        WHEN 'aaa_wayback' THEN 95
+        WHEN 'eia' THEN 50
+        WHEN 'fred' THEN 40
+        WHEN 'market' THEN 30
+        ELSE 0
+      END DESC,
+      time DESC
+  `;
   
-  return query.select('*').orderBy('region', 'asc');
+  const results = metric 
+    ? await knex.raw(query, [metric])
+    : await knex.raw(query);
+  
+  // Handle both { rows: [] } and [] depending on driver
+  return Array.isArray(results) ? results : (results.rows ?? []);
 }
 
 /**

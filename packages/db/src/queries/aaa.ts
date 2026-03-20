@@ -257,3 +257,88 @@ export async function getAllAaaStatesLatest(): Promise<AaaStateAggregateRow[]> {
     ORDER BY state, time DESC
   `).then((r: any) => r.rows);
 }
+
+// ---------------------------------------------------------------------------
+// PADD regional aggregates (derived from state-level AAA data)
+// ---------------------------------------------------------------------------
+
+export interface AaaPaddAggregateRow {
+  time: Date;
+  padd: string;           // R10 – R50
+  regular_mean:    number | null;
+  mid_grade_mean:  number | null;
+  premium_mean:    number | null;
+  diesel_mean:     number | null;
+  regular_wtd:     number | null;   // population-weighted (2020 Census)
+  mid_grade_wtd:   number | null;
+  premium_wtd:     number | null;
+  diesel_wtd:      number | null;
+  state_count:     number;
+}
+
+/** Upsert one or more daily PADD aggregate rows (idempotent on re-run). */
+export async function upsertPaddAggregates(rows: AaaPaddAggregateRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  const knex = getKnex();
+
+  const CHUNK = 50;
+  const sorted = [...rows].sort(
+    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+  );
+  for (let i = 0; i < sorted.length; i += CHUNK) {
+    await knex('aaa_padd_aggregates')
+      .insert(sorted.slice(i, i + CHUNK))
+      .onConflict(['time', 'padd'])
+      .merge([
+        'regular_mean', 'mid_grade_mean', 'premium_mean', 'diesel_mean',
+        'regular_wtd',  'mid_grade_wtd',  'premium_wtd',  'diesel_wtd',
+        'state_count',
+      ]);
+  }
+}
+
+/**
+ * Latest row for a single PADD region.
+ * Returns null if no data exists yet.
+ */
+export async function getAaaPaddLatest(padd: string): Promise<AaaPaddAggregateRow | null> {
+  const knex = getKnex();
+  const row = await knex('aaa_padd_aggregates')
+    .where('padd', padd.toUpperCase())
+    .orderBy('time', 'desc')
+    .first<AaaPaddAggregateRow>();
+  return row ?? null;
+}
+
+/**
+ * Historical rows for a single PADD region, newest first.
+ * @param limit  Max rows to return (default 90, max 365)
+ */
+export async function getAaaPaddHistory(
+  padd: string,
+  limit = 90,
+): Promise<AaaPaddAggregateRow[]> {
+  const knex = getKnex();
+  return knex('aaa_padd_aggregates')
+    .where('padd', padd.toUpperCase())
+    .orderBy('time', 'desc')
+    .limit(limit)
+    .select<AaaPaddAggregateRow[]>('*');
+}
+
+/**
+ * Latest row for every PADD region (one row per region).
+ * Used for regional comparison pages / map overlays.
+ */
+export async function getAllAaaPaddLatest(): Promise<AaaPaddAggregateRow[]> {
+  const knex = getKnex();
+  return knex.raw(`
+    SELECT DISTINCT ON (padd)
+      padd, time,
+      regular_mean, mid_grade_mean, premium_mean, diesel_mean,
+      regular_wtd,  mid_grade_wtd,  premium_wtd,  diesel_wtd,
+      state_count
+    FROM aaa_padd_aggregates
+    ORDER BY padd, time DESC
+  `).then((r: any) => r.rows as AaaPaddAggregateRow[]);
+}

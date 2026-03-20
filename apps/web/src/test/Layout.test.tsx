@@ -3,10 +3,11 @@ import { render, screen } from './test-utils';
 import Layout from '../components/Layout';
 
 describe('Layout component', () => {
-  it('renders the FuelRipple brand name', () => {
+  it('renders the FuelRipple brand logo', () => {
     render(<Layout />);
-    expect(screen.getAllByText('Fuel').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Ripple').length).toBeGreaterThan(0);
+    const logo = screen.getByAltText('FuelRipple');
+    expect(logo).toBeInTheDocument();
+    expect(logo).toHaveAttribute('src', '/logo.svg');
   });
 
   it('renders all desktop navigation links', () => {

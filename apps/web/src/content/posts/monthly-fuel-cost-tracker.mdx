@@ -10,6 +10,8 @@ canonicalPath: /blog/monthly-fuel-cost-tracker
 readingMinutes: 5
 ---
 
+import { ArticleChart, ArticleTable, ArticleCallout } from '../components/ArticleChart';
+
 ## Understanding Household Fuel Impacts
 
 Gasoline prices changed $0.42 in March 2022. Your household didn't just see a pump price rise—you felt it at the grocery store, in your commute time calculation, and in your monthly budget. The question isn't "What is crude oil today?" It's **"How much is this volatility actually costing me personally?"**
@@ -78,6 +80,33 @@ Calculate your typical monthly fuel spend:
 
 Example: 12,000 annual miles = 1,000/month ÷ 25 mpg = 40 gallons/month × $3.20 = **$128/month baseline**
 
+<ArticleChart
+  type="bar"
+  title="Disruption Index Impact: Budget Adjustment by Score"
+  description="How much to increase your fuel budget based on Disruption Index score"
+  data={[
+    { score_range: 'Score 0–20\n(Calm)', adjustment: 0.00 },
+    { score_range: 'Score 21–40\n(Moderate)', adjustment: 0.035 },
+    { score_range: 'Score 41–60\n(Elevated)', adjustment: 0.085 },
+    { score_range: 'Score 61–80\n(High)', adjustment: 0.185 },
+    { score_range: 'Score 81–100\n(Crisis)', adjustment: 0.30 },
+  ]}
+  xAxisKey="score_range"
+  dataKey="adjustment"
+  color="#3b82f6"
+/>
+
+<ArticleCallout 
+  type="tip" 
+  title="Budget Formula"
+>
+  **Your monthly fuel budget** = (Baseline monthly spend) × (1 + Disruption Adjustment)
+
+Example: $128 baseline × (1 + 0.185 when Index is 70) = $151 expected spend
+
+This formula helps you avoid overspending during calm months and pad your budget during volatile months.
+</ArticleCallout>
+
 **Step 2: Model scenarios using the Disruption Index**
 
 FuelRipple publishes the Disruption Index weekly. The index ranges from 0–100:
@@ -135,6 +164,47 @@ This tracking shows your budget's actual sensitivity to the Disruption Index and
 - Prices moderate to $3.30/gal (Disruption Index ~35—elevated but manageable)
 - Refinery utilization strong, crude stable, geopolitical risks low
 - **Household impact**: Budget *expecting* a 5–7% increase ($140 vs. $133 baseline), with low probability of crisis-level spikes (Index >80). Safe to plan summer road trips without major fuel budget concerns.
+
+<ArticleTable
+  title="Real-World Scenario Impacts: Monthly Budget Adjustments"
+  headers={['Scenario', 'Baseline Price', 'Peak Price', 'Disruption Index', 'Budget Increase', 'Duration', 'Total Extra Cost']}
+  rows={[
+    {
+      Scenario: '2022 Invasion',
+      'Baseline Price': '$3.20',
+      'Peak Price': '$3.62',
+      'Disruption Index': '88',
+      'Budget Increase': '+$16–18',
+      Duration: '8 weeks',
+      'Total Extra Cost': '+$128–144'
+    },
+    {
+      Scenario: '2023 Refinery Outage',
+      'Baseline Price': '$3.50',
+      'Peak Price': '$3.85',
+      'Disruption Index': '71',
+      'Budget Increase': '+$14–16',
+      Duration: '4–6 weeks',
+      'Total Extra Cost': '+$56–96'
+    },
+    {
+      Scenario: '2024 Stable Summer',
+      'Baseline Price': '$3.30',
+      'Peak Price': '$3.45',
+      'Disruption Index': '35',
+      'Budget Increase': '+$3–5',
+      Duration: 'Ongoing',
+      'Total Extra Cost': '+$12–20/month'
+    },
+  ]}
+/>
+
+<ArticleCallout 
+  type="tip"
+  title="Pro Tip: Scenario Planning"
+>
+  When you see Disruption Index spike from 30 → 60 mid-week, assume 2-week duration and calculate your impact budget accordingly. Fill your tank if prices haven't caught up yet. You'll typically save $2–5 per cycle by 1–2 strategic fill-ups during index jumps.
+</ArticleCallout>
 
 ## Beyond the Index: Travel Decisions
 
@@ -204,3 +274,5 @@ You can't control crude oil prices or geopolitics. But you *can* quantify your h
 4. **Plan tactically**: Household budget decisions (road trip, new vehicle, relocation closer to work) are easier when you quantify fuel volatility.
 
 FuelRipple's Disruption Index bridges the gap between abstract energy markets and your monthly credit card statement. Use it to make smarter decisions about when, where, and how much to drive.
+
+

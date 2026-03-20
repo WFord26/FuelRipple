@@ -10,6 +10,8 @@ canonicalPath: /blog/padd-regions-explained
 readingMinutes: 7
 ---
 
+import { ArticleChart, ArticleTable, ArticleCallout } from '../components/ArticleChart';
+
 ## Understanding PADD Districts
 
 Why does a gallon of premium unleaded cost $3.50 in Houston but $4.10 in Los Angeles? Why did Midwest refineries in 2022 face shortages while the Gulf had surplus? The answer lies in the **Petroleum Administration for Defense Districts (PADDs)**—five distinct, semi-isolated fuel markets that the U.S. government created in 1942 and which still define how gasoline reaches your tank today.
@@ -45,6 +47,29 @@ This geography creates four distinct fuel markets, not one national market. When
 - Import crude directly by tanker (cheaper than pipelines)
 - Export refined products globally
 - Benefit from massive scale and competition
+
+<ArticleChart
+  type="bar"
+  title="U.S. Refinery Capacity by PADD District"
+  description="Total operable refining capacity distribution, 2025"
+  data={[
+    { padd: 'PADD 1\n(East)', capacity: 1.1 },
+    { padd: 'PADD 2\n(Midwest)', capacity: 3.2 },
+    { padd: 'PADD 3\n(Gulf)', capacity: 6.5 },
+    { padd: 'PADD 4\n(Rocky Mt)', capacity: 0.8 },
+    { padd: 'PADD 5\n(West)', capacity: 2.1 },
+  ]}
+  xAxisKey="padd"
+  dataKey="capacity"
+  color="#10b981"
+/>
+
+<ArticleCallout 
+  type="tip"
+  title="Why PADD 3 Dominates"
+>
+  PADD 3 (Gulf Coast) has 50% of total U.S. refining capacity. It imports crude by tanker (cheaper than pipelines), exports globally, and benefits from massive scale. One Gulf refinery outage hurts less than one West Coast outage because the region has enormous spare capacity in nearby facilities.
+</ArticleCallout>
 
 **Supply chains**: PADD 3 feeds the entire Midwest (PADD 2) via major pipelines. When PADD 3 refineries are healthy, fuel flows north; margins are tight; prices in the Midwest stay low relative to other regions.
 
@@ -101,6 +126,13 @@ This geography creates four distinct fuel markets, not one national market. When
 
 **Fuel specs**: California mandates CARBOB (California Reformulated Gasoline)—the world's strictest fuel specification. It reduces smog-forming compounds but also limits refinery capacity (can't blend with standard gasoline). Only 8 U.S. refineries produce CARBOB; none are outside California. If a California refinery shuts down, there's no quick replacement.
 
+<ArticleCallout 
+  type="warning" 
+  title="CARBOB: The Regulatory Constraint"
+>
+  California's CARBOB specification is stricter than federal requirements and cannot be blended with standard gasoline. Only 8 U.S. refineries produce it; all are in California. This means: (1) a California refinery shutdown cannot be solved by importing from other states, and (2) refinery capacity is effectively committed to California demand with no flex to absorb disruptions.
+</ArticleCallout>
+
 **Price spikes: The mechanism**
 
 A typical disruption scenario:
@@ -122,6 +154,28 @@ Fuel does cross district boundaries, but slowly and expensively:
 - **PADD 3 → PADD 1**: Via reverse-flow Colonial (limited; conflicts with PADD 2 demand).
 - **PADD 2 → PADD 5**: Virtually impossible; no pipeline, and transport cost would exceed price difference.
 - **PADD 5 ← imports**: Ship from Asia (1–2 weeks) or truck from Mexico (expensive). During California outages, neither is fast enough.
+
+<ArticleChart
+  type="bar"
+  title="Typical PADD Price Premiums vs. PADD 3 (Gulf Coast)"
+  description="Average diesel/gasoline premium by region, normal market conditions"
+  data={[
+    { padd: 'PADD 2\n(Midwest)', premium: 0.03 },
+    { padd: 'PADD 1\n(East Coast)', premium: 0.18 },
+    { padd: 'PADD 4\n(Rocky Mt)', premium: 0.22 },
+    { padd: 'PADD 5\n(West Coast)', premium: 0.35 },
+  ]}
+  xAxisKey="padd"
+  dataKey="premium"
+  color="#f59e0b"
+/>
+
+<ArticleCallout 
+  type="warning" 
+  title="Premium Volatility"
+>
+  These are average premiums. During supply disruptions, PADD 4 and PADD 5 premiums can jump to $0.50–1.50/gallon within days. PADD 2 premiums rarely exceed $0.08 because pipeline supply is plentiful and reliable.
+</ArticleCallout>
 
 **Result**: Each PADD effectively operates as a separate market. National crude oil price rises, but PADD 5 retailer premiums widen independently based on local supply/demand.
 
@@ -151,3 +205,5 @@ The PADD system is 80+ years old, designed for post-war fuel rationing. It persi
 - **PADD 5 (West)**: Most expensive, most volatile, regulatory constraints.
 
 The next time your state's gas prices jump while the national average is steady, you're seeing PADD dynamics at work. Your regional price isn't determined by the U.S. average—it's determined by what your district's refinery and pipeline network can supply.
+
+

@@ -7,9 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Wayback Machine historical backfill** — new script `apps/api/src/scripts/backfill-aaa-wayback.ts`
+  recovers state-level AAA gas prices from Internet Archive snapshots of
+  `gasprices.aaa.com/state-gas-price-averages/` dating back to Nov 2017:
+  - Queries CDX API with `collapse=timestamp:8` (one snapshot per day) to enumerate
+    ~1,655 archived snapshots
+  - Fetches and parses each snapshot with `cheerio`; handles two known HTML layouts
+    (pre-2020 and 2020+) with a regex text-match fallback
+  - Writes to `energy_prices` with `source='aaa_wayback'` for clear provenance; uses
+    `onConflict().ignore()` so re-runs are safely idempotent
+  - Polite 1,200 ms delay between Wayback requests; auto-retries on 429/503 with
+    `Retry-After` header support
+  - CLI flags: `--start`, `--end`, `--delay`, `--limit`, `--dry-run`, `--out` (CSV)
+  - Registered as `npm run --workspace=@fuelripple/api backfill-aaa-wayback`
+- **Live AAA state scraper script** — `apps/api/src/scripts/fetch-aaa-today.ts` scrapes
+  all 51 states from the live AAA website and upserts into the database:
+  - Uses `Date.UTC()` for a consistent UTC-midnight timestamp, preventing timezone-
+    driven duplicate records
+  - Deletes any existing same-day rows from `aaa_state_aggregates` before inserting
+    to eliminate stale duplicate entries
+  - Calls `initializeCache()` before `clearCache()` to ensure Redis L2 is properly
+    connected within the script process
+  - Registered as `npm run --workspace=@fuelripple/api fetch-aaa-today`
+- **`GET /api/v1/aaa/states`** — new endpoint returns the latest AAA prices for all
+  51 states in a single response; backed by `getAllAaaStatesLatest()` which uses
+  `DISTINCT ON (state) … ORDER BY state, time DESC`
+- **`getAllAaaStatePrices()`** client helper in `apps/web/src/api/client.ts` — fetches
+  all-states latest AAA data for the `/state-prices` comparison page
+- **`getStatePrice(abbr)`** client helper — EIA fallback for states without AAA data
+
+### Changed
+- **State detail page refactored** (`apps/web/src/pages/State.tsx`):
+  - *Current Prices* section replaced the single-grade toggle with a 4-row table
+    (Regular, Mid-Grade, Premium, Diesel) showing state price, national average, and
+    percentage difference side-by-side for every grade simultaneously
+  - *Price History by Grade* section replaced 4 individual change cards with a
+    full-width comparison table — all 4 grades × Current, 1 Week Ago, 1 Month Ago,
+    3 Months Ago, 1 Year Ago with colour-coded change badges in every cell
+  - Regular Gas / Diesel toggle moved from the changes section to sit inline with the
+    *Price History* chart header, where it controls the chart only
+  - Data source: now uses live AAA state data (all 51 states) with EIA regional data
+    as fallback; previously used synthetic seed data for only 8 states
+- **`backfill-aaa-state.ts` region code fix** — the script was storing EIA duoarea
+  codes (`SCO`) directly as the `state` column in `aaa_state_aggregates` instead of
+  converting to 2-letter abbreviations (`CO`). Fixed by importing `STATE_INFO` from
+  `regionMapper` and mapping each `region` through `STATE_INFO[region]?.abbr` before
+  upsert, so the chart history query (`WHERE state = 'CO'`) resolves correctly
+
+### Fixed
+- **Stale T06:00:00Z duplicate rows** — the first run of `fetch-aaa-today` stored
+  records at local-midnight (CDT = UTC−6, yielding `T06:00:00Z`), conflicting with
+  seed data already at `T00:00:00Z` for the same date. Fixed by switching to
+  `new Date(Date.UTC(…))` so all records consistently land at UTC midnight
+- **Redis not cleared in script context** — `clearCache()` called without first
+  calling `initializeCache()` left the script's Redis client as `null`, silently
+  skipping the L2 cache bust. Fixed by adding `initializeCache()` at script startup
+- **L1 LRU cache serving stale prices** — after a fresh scrape the Express server's
+  in-process LRU cache still served old data until its 5-minute TTL expired or the
+  server restarted. Resolved by restarting the dev server after each data refresh
+
 ---
 
 ## [1.1.0-beta.0] - 2026-03-19
+
 
 ### Added (Phase 1 — AAA Data Layer)
 - **AAA National Averages** — new `aaa_national_averages` hypertable stores daily 
@@ -43,6 +104,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dashboard payload reduction** — Dashboard now calls `/aaa/national/changes` instead 
   of fetching 365-row history and looping client-side, reducing the dashboard 
   initial payload significantly.
+
+### Added (Phase 3 — State-Level AAA Data)
+- **State-level AAA queries** — new DB query functions in `@fuelripple/db` for fast 
+  state-level lookups:
+  - `getAaaStateLatest(state)` — current AAA average for all 4 grades in a state
+  - `getAaaStateHistory(state, limit)` — recent historical AAA prices for a state (default 90 days)
+  - `getAaaStateChanges(state)` — pre-computed 7d/30d/90d/1y price deltas per grade in a state
+- **State-level AAA endpoints** — new routes in `/api/v1/aaa/state/:abbr`:
+  - `GET /api/v1/aaa/state/:abbr/latest` — current state-level averages
+  - `GET /api/v1/aaa/state/:abbr` — historical state-level prices (limit param, default 90)
+  - `GET /api/v1/aaa/state/:abbr/changes` — pre-computed price changes by grade
+- **State-level AAA client functions** — new helpers in `apps/web/src/api/client.ts`:
+  - `getAaaStateLatest(abbr)` — fetch current state prices
+  - `getAaaStateHistory(abbr, limit)` — fetch historical state prices
+  - `getAaaStateChanges(abbr)` — fetch pre-computed state price changes
+- **State detail pages now AAA-powered** — [State].tsx completely refactored to use 
+  state-level AAA data instead of EIA regional data:
+  - Pricing source: AAA state aggregates (daily, covers all 50 states + DC)
+  - Historical charts: 90-day AAA state history with fuel-type toggle (regular/diesel)
+  - Price changes: All 4 lookback periods (7d/30d/90d/1y) from pre-computed server deltas
+  - National comparison: Shows state vs. AAA national average with % variance badge
+  - Simplified UI: Removed PADD regional reference cards (AAA is state-level only)
+  - All 4 fuel grades: regular, mid-grade, premium, diesel (displayed by toggle)
 
 ### Optimized
 - **Data Layer Caching** — AAA backfill script now invalidates Redis cache after 

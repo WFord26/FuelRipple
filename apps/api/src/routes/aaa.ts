@@ -1,5 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { getRecentNationalAverages, getAaaNationalChanges } from '@fuelripple/db';
+import {
+  getRecentNationalAverages,
+  getAaaNationalChanges,
+  getAaaStateLatest,
+  getAaaStateHistory,
+  getAaaStateChanges,
+  getAllAaaStatesLatest,
+} from '@fuelripple/db';
 import { cacheOrFetch } from '../services/cache';
 import { CACHE_TTL } from '@fuelripple/shared';
 
@@ -86,6 +93,168 @@ router.get('/national/changes', async (req: Request, res: Response, next: NextFu
     });
   } catch (error) {
     next(error);
+  }
+});
+
+/**
+ * GET /api/v1/aaa/states
+ * Latest AAA prices for all states — regular, mid-grade, premium, diesel per state.
+ * One row per state, all 4 grades in separate columns.
+ */
+router.get('/states', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await cacheOrFetch(
+      'aaa:states:latest',
+      () => getAllAaaStatesLatest(),
+      CACHE_TTL.AAA_NATIONAL
+    );
+
+    res.json({
+      status: 'success',
+      data,
+      count: data.length,
+      source: 'aaa',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/aaa/state/:abbr/latest
+ * Current AAA state average price for all 4 grades (regular, mid-grade, premium, diesel).
+ * Cached 24 hours, invalidated by the daily AAA job.
+ */
+router.get('/state/:abbr/latest', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { abbr } = req.params;
+    if (!abbr || abbr.length !== 2) {
+      res.status(400).json({ status: 'error', message: 'Invalid state abbreviation' });
+      return;
+    }
+
+    const data = await cacheOrFetch(
+      `aaa:state:${abbr.toUpperCase()}:latest`,
+      () => getAaaStateLatest(abbr),
+      CACHE_TTL.AAA_NATIONAL
+    );
+
+    if (!data) {
+      res.status(404).json({ status: 'error', message: `No AAA data available for state ${abbr}` });
+      return;
+    }
+
+    res.json({
+      status: 'success',
+      data,
+      source: 'aaa',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/aaa/state/:abbr
+ * Historical AAA state average prices, newest-first (default 90 days).
+ *
+ * Query params:
+ *   limit  - number of days to return (default 90, max 365)
+ */
+router.get('/state/:abbr', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { abbr } = req.params;
+    if (!abbr || abbr.length !== 2) {
+      res.status(400).json({ status: 'error', message: 'Invalid state abbreviation' });
+      return;
+    }
+
+    const limit = Math.min(parseInt((req.query.limit as string) || '90', 10), 365);
+
+    const data = await cacheOrFetch(
+      `aaa:state:${abbr.toUpperCase()}:${limit}`,
+      () => getAaaStateHistory(abbr, limit),
+      CACHE_TTL.AAA_NATIONAL
+    );
+
+    console.log(`[DEBUG /state/:abbr] abbr=${abbr}, limit=${limit}, returned ${data.length} records`);
+
+    res.json({
+      status: 'success',
+      data,
+      count: data.length,
+      source: 'aaa',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/aaa/state/:abbr/changes
+ * Pre-computed 7d/30d/90d/365d price changes for all 4 grades in a state,
+ * calculated server-side. Returns at most 4 rows (one per grade).
+ */
+router.get('/state/:abbr/changes', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { abbr } = req.params;
+    if (!abbr || abbr.length !== 2) {
+      res.status(400).json({ status: 'error', message: 'Invalid state abbreviation' });
+      return;
+    }
+
+    const data = await cacheOrFetch(
+      `aaa:state:${abbr.toUpperCase()}:changes`,
+      () => getAaaStateChanges(abbr),
+      CACHE_TTL.AAA_NATIONAL
+    );
+
+    res.json({
+      status: 'success',
+      data,
+      source: 'aaa',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DEBUG: Check raw historical data  
+router.get('/debug/state/:abbr', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { abbr } = req.params;
+    const { getKnex } = await import('@fuelripple/db');
+    const knex = getKnex();
+    const data = await knex('aaa_state_aggregates')
+      .where('state', abbr.toUpperCase())
+      .orderBy('time', 'desc')
+      .limit(5)
+      .select('*');
+    res.json({
+      status: 'success',
+      state: abbr.toUpperCase(),
+      total_like_state: (await knex('aaa_state_aggregates').where('state', abbr.toUpperCase())).length,
+      sample: data,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// TEMP TEST: Direct function call test
+router.get('/test/state-history/:abbr', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { abbr } = req.params;
+    const data = await getAaaStateHistory(abbr, 10);
+    res.json({
+      status: 'success',
+      abbr,
+      test: 'direct function call',
+      data_length: data.length,
+      data: data.slice(0, 2),
+    });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
   }
 });
 

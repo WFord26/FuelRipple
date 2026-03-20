@@ -1,5 +1,5 @@
 import { useEffect, useState, Suspense } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { MDXProvider } from '@mdx-js/react';
 import { usePageSEO } from '../hooks/usePageSEO';
 import { mdxComponents } from '../content/components';
@@ -44,25 +44,43 @@ export default function BlogPost() {
   const [Post, setPost] = useState<React.ComponentType | null>(null);
   const [meta, setMeta] = useState<BlogPostMeta | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('📄 BlogPost: slug =', slug);
+    
     if (!slug) {
+      console.error('❌ BlogPost: slug is missing');
       setNotFound(true);
       return;
     }
 
     const loader = POST_MODULES[slug];
     if (!loader) {
+      console.error('❌ BlogPost: slug not found in POST_MODULES:', slug);
+      console.log('📍 Available slugs:', Object.keys(POST_MODULES));
       setNotFound(true);
       return;
     }
 
+    console.log('⏳ BlogPost: loading MDX for slug:', slug);
+    
     loader()
       .then(mod => {
+        console.log('✅ BlogPost: MDX loaded', { hasDefault: !!mod.default, hasFrontmatter: !!mod.frontmatter });
+        if (!mod.default) {
+          throw new Error('No default export from MDX');
+        }
+        if (!mod.frontmatter) {
+          console.warn('⚠️  No frontmatter found, using partial data');
+        }
         setPost(() => mod.default);
         setMeta(mod.frontmatter);
+        setError(null);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('❌ BlogPost: Error loading MDX:', err);
+        setError(err?.message || 'Failed to load article');
         setNotFound(true);
       });
   }, [slug]);
@@ -81,6 +99,16 @@ export default function BlogPost() {
       <div className="max-w-2xl mx-auto px-4 py-12">
         <h1 className="text-3xl font-bold text-red-400 mb-4">Post Not Found</h1>
         <p className="text-slate-400">The article you're looking for doesn't exist or has been removed.</p>
+        {error && (
+          <div className="mt-6 p-4 bg-red-950 border border-red-700 rounded">
+            <p className="text-red-300 text-sm font-mono">{error}</p>
+          </div>
+        )}
+        <div className="mt-6">
+          <Link to="/blog" className="text-blue-400 hover:text-blue-300">
+            ← Back to Blog
+          </Link>
+        </div>
       </div>
     );
   }
@@ -91,6 +119,17 @@ export default function BlogPost() {
 
   return (
     <article className="max-w-3xl mx-auto px-4 py-12">
+      {/* Back Navigation */}
+      <div className="mb-6">
+        <Link
+          to="/blog"
+          className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors"
+        >
+          <span className="text-xl">←</span>
+          <span>Back to Blog</span>
+        </Link>
+      </div>
+
       {/* Article Header */}
       <header className="mb-8 pb-8 border-b border-slate-700">
         <h1 className="text-4xl font-bold text-blue-100 mb-4">{meta.title}</h1>

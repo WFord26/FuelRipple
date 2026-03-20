@@ -162,3 +162,100 @@ export async function getStateAggregatesForDate(date: Date): Promise<AaaStateAgg
     .select<AaaStateAggregateRow[]>('*')
     .orderBy('state', 'asc');
 }
+
+/**
+ * Get the most recent AAA state aggregate (single row, all grades).
+ * Used for state detail page current prices.
+ */
+export async function getAaaStateLatest(state: string): Promise<AaaStateAggregateRow | null> {
+  const knex = getKnex();
+  const row = await knex('aaa_state_aggregates')
+    .where('state', state.toUpperCase())
+    .orderBy('time', 'desc')
+    .first<AaaStateAggregateRow>();
+  return row ?? null;
+}
+
+/**
+ * Get recent AAA state price history, newest first.
+ * Used for state detail page historical charts and comparisons.
+ */
+export async function getAaaStateHistory(
+  state: string,
+  limit = 90
+): Promise<AaaStateAggregateRow[]> {
+  const knex = getKnex();
+  const upperState = state.toUpperCase();
+  
+  const result = await knex('aaa_state_aggregates')
+    .where('state', upperState)
+    .orderBy('time', 'desc')
+    .limit(limit)
+    .select<AaaStateAggregateRow[]>('*');
+
+  console.log(`[DB] getAaaStateHistory(${state}, limit=${limit}) -> upperState=${upperState}, returned ${result.length} records`);
+  
+  return result;
+}
+
+/**
+ * Row type for AAA state-level price changes (like national changes but scoped to state).
+ */
+export interface AaaStateChangesRow {
+  grade: 'regular' | 'mid_grade' | 'premium' | 'diesel';
+  current_price: number | null;
+  week_ago_price: number | null;
+  week_change_pct: number | null;
+  month_ago_price: number | null;
+  month_change_pct: number | null;
+  three_month_ago_price: number | null;
+  three_month_change_pct: number | null;
+  year_ago_price: number | null;
+  year_change_pct: number | null;
+  as_of: Date;
+}
+
+/**
+ * Compute price changes for all 4 AAA grades in a specific state by comparing
+ * today's price against snapshots from 7, 30, 90, and 365 days ago.
+ * Returns at most 4 rows (one per grade), with price deltas computed server-side.
+ */
+export async function getAaaStateChanges(state: string): Promise<AaaStateChangesRow[]> {
+  const knex = getKnex();
+  const upperState = state.toUpperCase();
+
+  // Query the pre-computed cache table
+  const result = await knex('aaa_state_changes_cache')
+    .select(
+      'grade',
+      'current_price',
+      'week_ago_price',
+      'week_change_pct',
+      'month_ago_price',
+      'month_change_pct',
+      'three_month_ago_price as three_month_ago_price',
+      'three_month_change_pct',
+      'year_ago_price',
+      'year_change_pct',
+      'as_of'
+    )
+    .where('state', upperState)
+    .orderBy('grade');
+
+  return result as AaaStateChangesRow[];
+}
+
+/**
+ * Get the most recent AAA prices for all states (one row per state, all grades).
+ * Used for the state prices comparison page.
+ */
+export async function getAllAaaStatesLatest(): Promise<AaaStateAggregateRow[]> {
+  const knex = getKnex();
+
+  return knex.raw(`
+    SELECT DISTINCT ON (state)
+      state, time, regular, mid_grade, premium, diesel
+    FROM aaa_state_aggregates
+    ORDER BY state, time DESC
+  `).then((r: any) => r.rows);
+}

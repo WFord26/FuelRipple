@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { getCurrentPrices, getDisruptionScore, getTypicalImpact, getRegionalComparison, getPriceChanges, getSupplyHealth, getDownstreamImpact, getVolatility, getEvents, getSupplyInventories, getCurrentCrudePrice, getSeasonalComparison, getAaaNationalLatest, getAaaNationalChanges } from '../api/client';
+import { getCurrentPrices, getDisruptionScore, getTypicalImpact, getRegionalComparison, getPriceChanges, getSupplyHealth, getDownstreamImpact, getVolatility, getEvents, getSupplyInventories, getCurrentCrudePrice, getSeasonalComparison, getAaaNationalChanges } from '../api/client';
 import DisruptionMeter from '../components/DisruptionMeter';
 import USPriceMap from '../components/USPriceMap';
 import { usePageSEO } from '../hooks/usePageSEO';
@@ -44,7 +44,7 @@ export default function Dashboard() {
     canonicalPath: '/',
   });
 
-  const { data: prices, isLoading: pricesLoading } = useQuery({
+  const { isLoading: pricesLoading } = useQuery({
     queryKey: ['currentPrices', fuelType],
     queryFn: () => getCurrentPrices(fuelType),
   });
@@ -113,12 +113,6 @@ export default function Dashboard() {
     staleTime: 24 * 60 * 60 * 1000,
   });
 
-  const { data: aaaNational } = useQuery({
-    queryKey: ['aaaNationalLatest'],
-    queryFn: getAaaNationalLatest,
-    staleTime: 24 * 60 * 60 * 1000, // updates once daily
-  });
-
   const { data: aaaChanges } = useQuery({
     queryKey: ['aaaNationalChanges'],
     queryFn: getAaaNationalChanges,
@@ -132,8 +126,6 @@ export default function Dashboard() {
       </div>
     );
   }
-
-  const nationalPrice = prices?.find((p: any) => p.region === 'NUS' || p.region === 'US');
 
   return (
     <div className="space-y-6">

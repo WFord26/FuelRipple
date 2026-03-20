@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
+import { useApiVersion } from '../hooks/useApiVersion';
+import { getAppVersion } from '../lib/version';
 
 const navigation = [
   { name: 'Dashboard',    path: '/' },
@@ -10,11 +12,14 @@ const navigation = [
   { name: 'Correlation',  path: '/correlation' },
   { name: 'Downstream',   path: '/downstream' },
   { name: 'State Prices', path: '/state-prices' },
+  { name: 'Blog',         path: '/blog' },
 ];
 
 export default function Layout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: apiVersion } = useApiVersion();
+  const webVersion = getAppVersion();
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -136,7 +141,10 @@ export default function Layout() {
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-700/60 text-center text-xs text-slate-600">
-            © {new Date().getFullYear()} FuelRipple · Built with React, Express &amp; TimescaleDB
+            <div>© {new Date().getFullYear()} FuelRipple · Built with React, Express &amp; TimescaleDB</div>
+            <div className="mt-1 text-slate-700">
+              Web {webVersion} · API {apiVersion || 'loading...'}
+            </div>
           </div>
         </div>
       </footer>

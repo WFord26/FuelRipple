@@ -10,6 +10,8 @@ canonicalPath: /blog/rockets-and-feathers
 readingMinutes: 6
 ---
 
+import { ArticleChart, ArticleTable, ArticleCallout } from '../components/ArticleChart';
+
 ## The Asymmetry of Gas Price Changes
 
 When crude oil prices jump, gas prices at the pump follow within a week or two — like a rocket.
@@ -68,6 +70,32 @@ The FTC's 2023 study analyzed 15 years of daily data from 154,000 gas stations a
 - **Long-term asymmetry**: Over 4 weeks, increases are far more complete (80–90%) while decreases are only partial (40–50%).
 - **Margin effect**: Retailers' per-gallon margins increase by 30–40% during crude decline periods, then decline when crude rises again.
 
+<ArticleChart
+  type="line"
+  title="FTC Study: Asymmetry in Price Response to Crude Changes"
+  description="Cumulative price pass-through over time: 1¢ crude increase vs. 1¢ crude decrease"
+  data={[
+    { days: 0, increase: 0, decrease: 0},
+    { days: 1, increase: 0.25, decrease: 0.05 },
+    { days: 3, increase: 0.65, decrease: 0.15 },
+    { days: 5, increase: 0.85, decrease: 0.30 },
+    { days: 10, increase: 0.92, decrease: 0.45 },
+    { days: 15, increase: 0.95, decrease: 0.62 },
+    { days: 20, increase: 0.97, decrease: 0.75 },
+    { days: 28, increase: 0.99, decrease: 0.82 },
+  ]}
+  xAxisKey="days"
+  dataKey={['increase', 'decrease']}
+  color="#ef4444"
+/>
+
+<ArticleCallout 
+  type="warning" 
+  title="The Margin Capture Effect"
+>
+  When crude falls 1¢, pump prices fall 0.6–0.8¢ immediately but take 4 weeks to fully adjust. During those 4 weeks, retailers capture 0.2–0.4¢/gallon in extra margin. Across 150,000+ U.S. stations selling 378 million gallons per day, this adds up to roughly $27 million per day in transferred wealth—$10 billion per year.
+</ArticleCallout>
+
 Academic research dating back to the 1990s (Peltzman, 2000; Arioli et al., 2009) has consistently found the same pattern across US, European, and Australian fuel markets. It's not a quirk—it's a robust market phenomenon.
 
 ## Regional and Seasonal Variation
@@ -89,6 +117,48 @@ The rockets-and-feathers effect costs US consumers an estimated **$2–4 billion
 - An average 4-week delay in 5 cents of price relief = roughly **$12–15 per household per year** in cumulative losses.
 - During volatile years like 2022 (when crude swung $50+), losses doubled or tripled.
 
+<ArticleTable
+  title="Household Cost Impact of Rockets & Feathers Asymmetry"
+  headers={['Scenario', 'Annual Mileage', 'Fuel Efficiency', 'Gallons/Year', 'Estimated Annual Loss']}
+  rows={[
+    {
+      Scenario: 'Moderate driver',
+      'Annual Mileage': '12,000 mi',
+      'Fuel Efficiency': '25 mpg',
+      'Gallons/Year': '480 gal',
+      'Estimated Annual Loss': '$12–18'
+    },
+    {
+      Scenario: 'Above-average driver',
+      'Annual Mileage': '18,000 mi',
+      'Fuel Efficiency': '25 mpg',
+      'Gallons/Year': '720 gal',
+      'Estimated Annual Loss': '$18–27'
+    },
+    {
+      Scenario: 'High mileage driver',
+      'Annual Mileage': '25,000 mi',
+      'Fuel Efficiency': '22 mpg',
+      'Gallons/Year': '1,136 gal',
+      'Estimated Annual Loss': '$27–43'
+    },
+    {
+      Scenario: 'Volatile year (2022)',
+      'Annual Mileage': '12,000 mi',
+      'Fuel Efficiency': '25 mpg',
+      'Gallons/Year': '480 gal',
+      'Estimated Annual Loss': '$30–50'
+    },
+  ]}
+/>
+
+<ArticleCallout 
+  type="tip"
+  title="When to Fill Up"
+>
+  Track FuelRipple's Disruption Index or crude oil prices (check EIA.gov daily). When crude has been falling for 3–5 days but pump prices haven't dropped yet, that's when to fill up—you're capturing the 2–4 week lag window before prices eventually adjust.
+</ArticleCallout>
+
 **What can you do?**
 
 1. **Track price trends independently**: Use apps like GasBuddy or FuelRipple's Disruption Index to spot when crude prices fall but pump prices haven't—this is your window to fill up.
@@ -101,3 +171,5 @@ The rockets-and-feathers effect costs US consumers an estimated **$2–4 billion
 Rockets and feathers describe a real market mechanism: competitive dynamics that reward fast increases but allow slow decreases. It's not illegal price-fixing, but it's a documented asymmetry that systematically costs households money.
 
 The next time you see gas prices stay flat while crude oil is falling, you're not imagining it. You're watching market psychology and retail strategy at work.
+
+

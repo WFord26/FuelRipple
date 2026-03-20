@@ -15,6 +15,36 @@ export default function Blog() {
     keywords: ['blog', 'articles', 'gas prices', 'energy', 'disruption index'],
   });
 
+  // Debug: Log blog state on render
+  console.log('📄 Blog component rendering:', {
+    posts: ALL_POSTS.length,
+    firstPost: ALL_POSTS[0]?.slug,
+    allPostSlugs: ALL_POSTS.map(p => p.slug),
+    allPostTitles: ALL_POSTS.map(p => p.title),
+  });
+
+  // Check if there are posts
+  if (ALL_POSTS.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        <section className="mb-12">
+          <h1 className="text-4xl font-bold mb-4 text-blue-100">FuelRipple Blog</h1>
+        </section>
+        <div className="text-center py-12">
+          <p className="text-red-400 text-lg">❌ No blog posts loaded.</p>
+          <p className="text-slate-400 mt-2">Check browser console for errors.</p>
+          <details className="mt-4 text-left bg-slate-900 p-4 rounded">
+            <summary className="cursor-pointer text-slate-300">Debug Info</summary>
+            <pre className="mt-2 text-xs overflow-auto">
+              ALL_POSTS length: {ALL_POSTS.length}
+              Posts: {JSON.stringify(ALL_POSTS.map(p => ({ slug: p.slug, title: p.title })), null, 2)}
+            </pre>
+          </details>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
       <section className="mb-12">

@@ -2,6 +2,7 @@ import { MDXComponents } from 'mdx/types';
 import { LivePriceInline } from './LivePriceInline';
 import { DisruptionCallout } from './DisruptionCallout';
 import { ArticleFuelCalculator } from './ArticleFuelCalculator';
+import { ArticleChart, ArticleTable, ArticleCallout } from './ArticleChart';
 
 /**
  * MDX component shadowing: Maps standard HTML elements and custom components
@@ -84,4 +85,7 @@ export const mdxComponents: MDXComponents = {
   LivePriceInline,
   DisruptionCallout,
   ArticleFuelCalculator,
+  ArticleChart,
+  ArticleTable,
+  ArticleCallout,
 };

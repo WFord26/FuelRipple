@@ -10,6 +10,8 @@ canonicalPath: /blog/2022-energy-crisis-geopolitics
 readingMinutes: 8
 ---
 
+import { ArticleChart, ArticleTable, ArticleCallout } from '../components/ArticleChart';
+
 ## Global Events and Energy Markets
 
 The 2022 energy crisis demonstrated how interconnected global oil markets are and how quickly geopolitical events can impact consumer energy costs.
@@ -30,6 +32,33 @@ Russia and Ukraine together account for ~3% of global crude oil supply and ~12% 
 - Cascading economic damage
 
 On March 7, 2022, WTI crude hit $130/barrel—the highest nominal price ever recorded (exceeding 2008's $145). U.S. gasoline prices averaged $4.13/gallon by March 11—a 38-year record and 26% higher than one month prior.
+
+<ArticleChart
+  type="line"
+  title="WTI Crude Oil Prices, February–December 2022"
+  description="The 2022 energy crisis: invasion spike, demand destruction, and recovery"
+  data={[
+    { month: 'Feb 24', date: 'Invasion', price: 96 },
+    { month: 'Mar 7', date: 'Peak Fear', price: 130 },
+    { month: 'Mar 31', date: 'Q1 End', price: 111 },
+    { month: 'Apr 30', date: 'SPR Announced', price: 105 },
+    { month: 'Jun 14', date: 'Peak Demand', price: 122 },
+    { month: 'Jul 31', date: 'Recession Fears', price: 92 },
+    { month: 'Sep 30', date: 'OPEC Cut', price: 88 },
+    { month: 'Nov 30', date: 'Q4 End', price: 78 },
+    { month: 'Dec 31', date: 'Year End', price: 75 },
+  ]}
+  xAxisKey="month"
+  dataKey="price"
+  color="#f97316"
+/>
+
+<ArticleCallout 
+  type="warning" 
+  title="The Shock in Numbers"
+>
+  WTI rose $34/barrel in 2 weeks (Feb 24–Mar 7, +35%). This single shock added roughly $1.50–2.00/gallon to pump prices within 4 weeks and triggered the highest nominal gasoline price in U.S. history (~$5.02/gal).
+</ArticleCallout>
 
 ## Why Ukraine Mattered: The Energy Map
 
@@ -96,6 +125,55 @@ The SPR release was a macro policy move affecting national-scale crude prices, b
 - **Incremental cost**: $792/year, or **$66/month extra**.
 
 For a household spending $2,000/month on essentials (rent, food, utilities, transportation), a $66/month fuel increase is 3.3% of total spending—meaningful belt-tightening.
+
+<ArticleTable
+  title="2022 Gasoline Prices by PADD & Regional Impact"
+  headers={['PADD Region', 'Pre-Crisis Avg', 'Peak Price (Jun)', 'Average Crisis Price', 'Extra Cost/Year (480 gal)']}
+  rows={[
+    {
+      'PADD Region': 'PADD 2 (Midwest)',
+      'Pre-Crisis Avg': '$3.10',
+      'Peak Price (Jun)': '$4.90',
+      'Average Crisis Price': '$4.20',
+      'Extra Cost/Year (480 gal)': '+$528'
+    },
+    {
+      'PADD Region': 'PADD 3 (Gulf Coast)',
+      'Pre-Crisis Avg': '$3.00',
+      'Peak Price (Jun)': '$4.75',
+      'Average Crisis Price': '$4.05',
+      'Extra Cost/Year (480 gal)': '+$480'
+    },
+    {
+      'PADD Region': 'PADD 1 (East Coast)',
+      'Pre-Crisis Avg': '$3.25',
+      'Peak Price (Jun)': '$5.15',
+      'Average Crisis Price': '$4.35',
+      'Extra Cost/Year (480 gal)': '+$528'
+    },
+    {
+      'PADD Region': 'PADD 4 (Rocky Mt)',
+      'Pre-Crisis Avg': '$3.35',
+      'Peak Price (Jun)': '$5.40',
+      'Average Crisis Price': '$4.60',
+      'Extra Cost/Year (480 gal)': '+$600'
+    },
+    {
+      'PADD Region': 'PADD 5 (West Coast)',
+      'Pre-Crisis Avg': '$3.40',
+      'Peak Price (Jun)': '$6.40',
+      'Average Crisis Price': '$5.10',
+      'Extra Cost/Year (480 gal)': '+$816'
+    },
+  ]}
+/>
+
+<ArticleCallout 
+  type="warning" 
+  title="Regional Inequality"
+>
+  A West Coast household paying $5.10 average in 2022 vs. a Gulf Coast household at $4.05 faced $504 more in annual fuel costs driving identical miles. Over an 8-month crisis period, that's $336—significant for families living paycheck to paycheck. Regional fragmentation meant some households were 27% harder hit than others.
+</ArticleCallout>
 
 **Regional Disparity**
 
@@ -221,3 +299,5 @@ The 2022 energy crisis showed that geopolitical shocks to energy are real, immed
 The crisis is over—crude has cooled, refineries are running steady, and geopolitical risk premiums have deflated. But the *fragility* remains. Russia can still cut supply; another OPEC+ split is possible; refinery capacity is still constrained.
 
 FuelRipple tracks these risks so you don't have to. The Disruption Index would have warned you in February 2022 that volatility was about to explode. Use it to prepare for the next one.
+
+

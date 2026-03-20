@@ -1,30 +1,20 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  getCurrentPrices,
-  getHistoricalPrices,
-  getPriceChanges,
+  getAaaStateLatest,
+  getAaaStateHistory,
+  getAaaStateChanges,
+  getAaaNationalLatest,
+  getStatePrice,
   getTypicalImpact,
-  getSeasonalComparison,
 } from '../api/client';
 import { PriceChart } from '../components/PriceChart';
 import { usePageSEO } from '../hooks/usePageSEO';
 
 // ── State → EIA duoarea code mapping ─────────────────────────────────────────
-const ABBR_TO_DUOAREA: Record<string, string> = {
-  AL: 'SAL', AK: 'SAK', AZ: 'SAZ', AR: 'SAR', CA: 'SCA',
-  CO: 'SCO', CT: 'SCT', DC: 'SDC', DE: 'SDE', FL: 'SFL',
-  GA: 'SGA', HI: 'SHI', ID: 'SID', IL: 'SIL', IN: 'SIN',
-  IA: 'SIA', KS: 'SKS', KY: 'SKY', LA: 'SLA', ME: 'SME',
-  MD: 'SMD', MA: 'SMA', MI: 'SMI', MN: 'SMN', MS: 'SMS',
-  MO: 'SMO', MT: 'SMT', NE: 'SNE', NV: 'SNV', NH: 'SNH',
-  NJ: 'SNJ', NM: 'SNM', NY: 'SNY', NC: 'SNC', ND: 'SND',
-  OH: 'SOH', OK: 'SOK', OR: 'SOR', PA: 'SPA', RI: 'SRI',
-  SC: 'SSC', SD: 'SSD', TN: 'STN', TX: 'STX', UT: 'SUT',
-  VT: 'SVT', VA: 'SVA', WA: 'SWA', WV: 'SWV', WI: 'SWI',
-  WY: 'SWY',
-};
+// Keeping PADD mapping for regional reference, but no longer mapping to EIA regions
+
 
 const ABBR_TO_NAME: Record<string, string> = {
   AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
@@ -72,15 +62,20 @@ const ABBR_TO_PADD: Record<string, { code: string; name: string }> = {
 
 // ── Time range options ───────────────────────────────────────────────────────
 
+// Map from UI fuel type to grade name in API responses
+const gradeMap: Record<string, string> = {
+  gas_regular: 'regular',
+  diesel: 'diesel',
+};
+
 
 export default function State() {
   const { stateAbbr: rawAbbr } = useParams<{ stateAbbr: string }>();
   const abbr = (rawAbbr ?? '').toUpperCase();
   const stateName = ABBR_TO_NAME[abbr];
-  const duoarea = ABBR_TO_DUOAREA[abbr];
   const padd = ABBR_TO_PADD[abbr];
-  const [fuelType, setFuelType] = useState<'gas_regular' | 'diesel'>('gas_regular');
-  const fuelLabel = fuelType === 'gas_regular' ? 'Regular Gasoline' : 'Diesel';
+  const [chartFuelType, setChartFuelType] = useState<'gas_regular' | 'diesel'>('gas_regular');
+  const chartFuelLabel = chartFuelType === 'gas_regular' ? 'Regular Gasoline' : 'Diesel';
 
   usePageSEO({
     title: stateName ? `${stateName} Gas Prices` : 'State Gas Prices',
@@ -91,53 +86,86 @@ export default function State() {
   });
 
   // ── Queries ────────────────────────────────────────────────────────────────
-  const { data: allPrices, isLoading: pricesLoading } = useQuery({
-    queryKey: ['currentPrices', fuelType],
-    queryFn: () => getCurrentPrices(fuelType),
-    enabled: !!duoarea,
+  // State-level data: Try AAA first, fall back to EIA if unavailable
+  const { data: stateLatest, isLoading: stateLoading } = useQuery({
+    queryKey: ['stateLatest', abbr],
+    queryFn: async () => {
+      try {
+        // Try AAA first
+        return await getAaaStateLatest(abbr);
+      } catch (error) {
+        // Fall back to EIA if AAA not available
+        return await getStatePrice(abbr);
+      }
+    },
+    enabled: !!stateName,
   });
 
-  const { data: history, isLoading: historyLoading } = useQuery({
-    queryKey: ['stateHistory', duoarea, fuelType],
-    queryFn: () => getHistoricalPrices({ metric: fuelType, region: duoarea!, granularity: 'weekly' }),
-    enabled: !!duoarea,
+  const { data: stateHistory, isLoading: historyLoading } = useQuery({
+    queryKey: ['aaaStateHistory', abbr],
+    queryFn: () => getAaaStateHistory(abbr, 90),
+    enabled: !!stateName,
   });
 
-  const { data: priceChanges } = useQuery({
-    queryKey: ['statePriceChanges', duoarea, fuelType],
-    queryFn: () => getPriceChanges(fuelType, duoarea!),
-    enabled: !!duoarea,
+  const { data: stateChanges } = useQuery({
+    queryKey: ['aaaStateChanges', abbr],
+    queryFn: () => getAaaStateChanges(abbr),
+    enabled: !!stateName,
+  });
+
+  // National AAA data for comparison
+  const { data: nationalLatest } = useQuery({
+    queryKey: ['aaaNationalLatest'],
+    queryFn: () => getAaaNationalLatest(),
   });
 
   const { data: impact } = useQuery({
-    queryKey: ['stateImpact', duoarea],
-    queryFn: () => getTypicalImpact(duoarea!),
-    enabled: !!duoarea,
+    queryKey: ['stateImpact', padd?.code],
+    queryFn: () => getTypicalImpact(padd?.code || 'NUS'),
+    enabled: !!padd,
   });
 
-  const { data: seasonal } = useQuery({
-    queryKey: ['stateSeasonal', duoarea, fuelType],
-    queryFn: () => getSeasonalComparison(fuelType, duoarea!, 5),
-    enabled: !!duoarea,
-  });
+  // Extract all prices from AAA data
+  const allGrades = useMemo(() => {
+    if (!stateLatest || !nationalLatest) return null;
+    
+    return [
+      {
+        grade: 'regular',
+        label: 'Regular',
+        statePrice: typeof stateLatest.regular === 'number' ? stateLatest.regular : Number(stateLatest.regular),
+        nationalPrice: typeof nationalLatest.regular === 'number' ? nationalLatest.regular : Number(nationalLatest.regular),
+      },
+      {
+        grade: 'mid_grade',
+        label: 'Mid-Grade',
+        statePrice: typeof stateLatest.mid_grade === 'number' ? stateLatest.mid_grade : Number(stateLatest.mid_grade),
+        nationalPrice: typeof nationalLatest.mid_grade === 'number' ? nationalLatest.mid_grade : Number(nationalLatest.mid_grade),
+      },
+      {
+        grade: 'premium',
+        label: 'Premium',
+        statePrice: typeof stateLatest.premium === 'number' ? stateLatest.premium : Number(stateLatest.premium),
+        nationalPrice: typeof nationalLatest.premium === 'number' ? nationalLatest.premium : Number(nationalLatest.premium),
+      },
+      {
+        grade: 'diesel',
+        label: 'Diesel',
+        statePrice: typeof stateLatest.diesel === 'number' ? stateLatest.diesel : Number(stateLatest.diesel),
+        nationalPrice: typeof nationalLatest.diesel === 'number' ? nationalLatest.diesel : Number(nationalLatest.diesel),
+      },
+    ].map(g => ({
+      ...g,
+      vsDiff: g.statePrice != null && g.nationalPrice != null && g.nationalPrice > 0
+        ? ((g.statePrice - g.nationalPrice) / g.nationalPrice) * 100
+        : null,
+    }));
+  }, [stateLatest, nationalLatest]);
 
-  // National + PADD averages for comparison
-  const nationalPrice = useMemo(() => {
-    return allPrices?.find((p: any) => p.region === 'NUS' || p.region === 'US')?.value ?? null;
-  }, [allPrices]);
-
-  const paddPrice = useMemo(() => {
-    if (!padd) return null;
-    return allPrices?.find((p: any) => p.region === padd.code)?.value ?? null;
-  }, [allPrices, padd]);
-
-  const statePrice = useMemo(() => {
-    if (!duoarea) return null;
-    return allPrices?.find((p: any) => p.region === duoarea)?.value ?? null;
-  }, [allPrices, duoarea]);
+  const pricesLoading = stateLoading;
 
   // ── Guard: unknown state ───────────────────────────────────────────────────
-  if (!stateName || !duoarea) {
+  if (!stateName) {
     return (
       <div className="space-y-4">
         <Link to="/comparison" className="text-primary-400 hover:text-primary-300 text-sm">← Back to Regional</Link>
@@ -159,13 +187,6 @@ export default function State() {
     );
   }
 
-  const vsNational = statePrice != null && nationalPrice != null && nationalPrice > 0
-    ? ((statePrice - nationalPrice) / nationalPrice) * 100
-    : null;
-  const vsPadd = statePrice != null && paddPrice != null && paddPrice > 0
-    ? ((statePrice - paddPrice) / paddPrice) * 100
-    : null;
-
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
@@ -180,133 +201,171 @@ export default function State() {
         <div>
           <h2 className="text-3xl font-bold text-white mb-1">{stateName} ({abbr})</h2>
           <p className="text-slate-400">
-            {padd?.name} (PADD {padd?.code.replace('R', '')}) · {fuelLabel}
+            {padd?.name} (PADD {padd?.code.replace('R', '')})
           </p>
         </div>
-        {/* Fuel type toggle */}
-        <div className="flex items-center bg-slate-800 rounded-lg border border-slate-700 p-1">
-          <button
-            onClick={() => setFuelType('gas_regular')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-              fuelType === 'gas_regular'
-                ? 'bg-primary-600 text-white'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            ⛽ Regular Gas
-          </button>
-          <button
-            onClick={() => setFuelType('diesel')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-              fuelType === 'diesel'
-                ? 'bg-primary-600 text-white'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            🚛 Diesel
-          </button>
-        </div>
       </div>
 
-      {/* Price Overview Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {/* State Price */}
-        <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 text-center">
-          <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">{abbr} Current</div>
-          <div className="text-2xl font-bold text-white">
-            {statePrice != null ? `$${statePrice.toFixed(3)}` : '—'}
+      {/* Current Prices Table — All Grades */}
+      {allGrades && allGrades.length > 0 ? (
+        <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 overflow-x-auto">
+          <h3 className="text-lg font-semibold text-white mb-4">Current Prices</h3>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-700">
+                <th className="text-left px-3 py-2 text-slate-400 font-medium">Fuel Grade</th>
+                <th className="text-right px-3 py-2 text-slate-400 font-medium">{abbr} Price</th>
+                <th className="text-right px-3 py-2 text-slate-400 font-medium">National Avg</th>
+                <th className="text-right px-3 py-2 text-slate-400 font-medium">Difference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allGrades.map((g) => (
+                <tr key={g.grade} className="border-b border-slate-700 last:border-b-0">
+                  <td className="px-3 py-3 text-slate-300 font-medium">{g.label}</td>
+                  <td className="text-right px-3 py-3 text-white font-semibold">
+                    ${g.statePrice?.toFixed(3) ?? '—'}
+                  </td>
+                  <td className="text-right px-3 py-3 text-slate-400">
+                    ${g.nationalPrice?.toFixed(3) ?? '—'}
+                  </td>
+                  <td className="text-right px-3 py-3">
+                    {g.vsDiff != null ? (
+                      <span className={`font-semibold ${g.vsDiff >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                        {g.vsDiff >= 0 ? '+' : ''}{g.vsDiff.toFixed(1)}%
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 text-center">
+          <p className="text-slate-400">No current price data available for {stateName}</p>
+        </div>
+      )}
+
+      {/* Price Changes — Chart Fuel Type */}
+      {/* Price History by Grade — all grades × all time periods */}
+      {stateChanges && stateChanges.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-4">Price History by Grade</h3>
+          <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-700">
+                  <th className="text-left text-xs font-semibold text-slate-400 uppercase tracking-wide px-4 py-3">Grade</th>
+                  <th className="text-right text-xs font-semibold text-slate-400 uppercase tracking-wide px-4 py-3">Current</th>
+                  <th className="text-right text-xs font-semibold text-slate-400 uppercase tracking-wide px-4 py-3">1 Week Ago</th>
+                  <th className="text-right text-xs font-semibold text-slate-400 uppercase tracking-wide px-4 py-3">Change</th>
+                  <th className="text-right text-xs font-semibold text-slate-400 uppercase tracking-wide px-4 py-3">1 Month Ago</th>
+                  <th className="text-right text-xs font-semibold text-slate-400 uppercase tracking-wide px-4 py-3">Change</th>
+                  <th className="text-right text-xs font-semibold text-slate-400 uppercase tracking-wide px-4 py-3">3 Months Ago</th>
+                  <th className="text-right text-xs font-semibold text-slate-400 uppercase tracking-wide px-4 py-3">Change</th>
+                  <th className="text-right text-xs font-semibold text-slate-400 uppercase tracking-wide px-4 py-3">1 Year Ago</th>
+                  <th className="text-right text-xs font-semibold text-slate-400 uppercase tracking-wide px-4 py-3">Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { key: 'regular', label: 'Regular' },
+                  { key: 'mid_grade', label: 'Mid-Grade' },
+                  { key: 'premium', label: 'Premium' },
+                  { key: 'diesel', label: 'Diesel' },
+                ].map(({ key, label }, i) => {
+                  const row = stateChanges.find(c => c.grade === key);
+                  if (!row) return null;
+                  const periods = [
+                    { priceKey: 'week_ago_price', pctKey: 'week_change_pct' },
+                    { priceKey: 'month_ago_price', pctKey: 'month_change_pct' },
+                    { priceKey: 'three_month_ago_price', pctKey: 'three_month_change_pct' },
+                    { priceKey: 'year_ago_price', pctKey: 'year_change_pct' },
+                  ];
+                  return (
+                    <tr key={key} className={i < 3 ? 'border-b border-slate-700/50' : ''}>
+                      <td className="px-4 py-3 font-medium text-white">{label}</td>
+                      <td className="px-4 py-3 text-right font-bold text-white">
+                        {row.current_price != null ? `$${Number(row.current_price).toFixed(3)}` : '—'}
+                      </td>
+                      {periods.map(({ priceKey, pctKey }) => {
+                        const price = (row as any)[priceKey];
+                        const pct = (row as any)[pctKey] as number | null;
+                        return (
+                          <Fragment key={priceKey}>
+                            <td className="px-4 py-3 text-right text-slate-300">
+                              {price != null ? `$${Number(price).toFixed(3)}` : '—'}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {pct != null ? (
+                                <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full ${pct >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>
+                                  {pct >= 0 ? '▲' : '▼'} {Math.abs(Number(pct)).toFixed(2)}%
+                                </span>
+                              ) : '—'}
+                            </td>
+                          </Fragment>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <div className="text-xs text-slate-500 mt-0.5">per gallon</div>
-        </div>
-
-        {/* vs National */}
-        <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 text-center">
-          <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">National Avg</div>
-          <div className="text-2xl font-bold text-white">
-            {nationalPrice != null ? `$${nationalPrice.toFixed(3)}` : '—'}
-          </div>
-          {vsNational != null && (
-            <span className={`mt-1 inline-flex text-xs font-semibold px-2 py-0.5 rounded-full ${vsNational >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>
-              {vsNational >= 0 ? '+' : ''}{vsNational.toFixed(1)}%
-            </span>
-          )}
-        </div>
-
-        {/* vs PADD */}
-        <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 text-center">
-          <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">{padd?.name} Avg</div>
-          <div className="text-2xl font-bold text-white">
-            {paddPrice != null ? `$${paddPrice.toFixed(3)}` : '—'}
-          </div>
-          {vsPadd != null && (
-            <span className={`mt-1 inline-flex text-xs font-semibold px-2 py-0.5 rounded-full ${vsPadd >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>
-              {vsPadd >= 0 ? '+' : ''}{vsPadd.toFixed(1)}%
-            </span>
-          )}
-        </div>
-
-        {/* Seasonal */}
-        <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 text-center">
-          <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">Seasonal Avg</div>
-          {seasonal ? (
-            <>
-              <div className="text-2xl font-bold text-white">${seasonal.seasonalAvg.toFixed(3)}</div>
-              <span className={`mt-1 inline-flex text-xs font-semibold px-2 py-0.5 rounded-full ${seasonal.delta >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>
-                {seasonal.delta >= 0 ? '+' : ''}${Math.abs(seasonal.delta).toFixed(3)}
-              </span>
-            </>
-          ) : (
-            <div className="text-2xl font-bold text-white">—</div>
-          )}
-        </div>
-      </div>
-
-      {/* Price Changes */}
-      {priceChanges && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { label: '1 Week', price: priceChanges.weekAgoPrice, pct: priceChanges.weekChangePct },
-            { label: '1 Month', price: priceChanges.monthAgoPrice, pct: priceChanges.monthChangePct },
-            { label: '3 Months', price: priceChanges.threeMonthAgoPrice, pct: priceChanges.threeMonthChangePct },
-            { label: '1 Year', price: priceChanges.yearAgoPrice, pct: priceChanges.yearChangePct },
-          ].map(({ label, price, pct }) => (
-            <div key={label} className="bg-slate-800 rounded-lg p-4 border border-slate-700 text-center">
-              <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">{label} Ago</div>
-              <div className="text-xl font-bold text-white">
-                {price != null ? `$${price.toFixed(3)}` : '—'}
-              </div>
-              {pct != null && (
-                <span className={`mt-1 inline-flex text-xs font-semibold px-2 py-0.5 rounded-full ${pct >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>
-                  {pct >= 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(2)}%
-                </span>
-              )}
-            </div>
-          ))}
         </div>
       )}
 
       {/* Historical Chart */}
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-        <h3 className="text-lg font-semibold text-white mb-4">
-          Price History — {stateName} ({fuelLabel})
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Price History — {chartFuelLabel}</h3>
+          <div className="flex items-center bg-slate-700 rounded-lg border border-slate-600 p-1">
+            <button
+              onClick={() => setChartFuelType('gas_regular')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                chartFuelType === 'gas_regular'
+                  ? 'bg-primary-600 text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              ⛽ Regular Gas
+            </button>
+            <button
+              onClick={() => setChartFuelType('diesel')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                chartFuelType === 'diesel'
+                  ? 'bg-primary-600 text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🚛 Diesel
+            </button>
+          </div>
+        </div>
         {historyLoading ? (
           <div className="flex justify-center items-center h-64">
             <div className="text-slate-400">Loading chart...</div>
           </div>
-        ) : history && history.length > 0 ? (
+        ) : stateHistory && stateHistory.length > 0 ? (
           <PriceChart
-            data={history.map((d: any) => ({
-              time: d.time,
-              value: parseFloat(d.value),
-            }))}
+            data={stateHistory
+              .map((d: any) => {
+                const grade = gradeMap[chartFuelType] as keyof typeof d;
+                return {
+                  time: d.time,
+                  value: d[grade],
+                };
+              })
+              .filter((d: any) => d.value != null)}
             height={320}
           />
         ) : (
           <div className="flex justify-center items-center h-64">
             <p className="text-slate-400">
-              No historical data available for {stateName}.
-              {!statePrice && ' EIA may not report state-level prices for this state.'}
+              No historical AAA data available for {stateName}.
             </p>
           </div>
         )}
@@ -338,7 +397,7 @@ export default function State() {
                 </div>
               </div>
             </>
-          ) : statePrice ? (
+          ) : allGrades?.[0]?.statePrice ? (
             <div className="text-slate-500 text-sm">Calculating…</div>
           ) : (
             <div className="text-slate-500 text-sm">No state-level price data available</div>
@@ -349,91 +408,47 @@ export default function State() {
         <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-lg">📊</span>
-            <span className="text-sm font-medium text-slate-300">Price Position</span>
+            <span className="text-sm font-medium text-slate-300">Price Position vs National</span>
           </div>
           <div className="space-y-4">
             {/* vs National bar */}
             <div>
               <div className="flex justify-between text-xs text-slate-400 mb-1">
-                <span>vs National Average</span>
-                <span className={vsNational != null ? (vsNational >= 0 ? 'text-red-400' : 'text-green-400') : ''}>
-                  {vsNational != null ? `${vsNational >= 0 ? '+' : ''}${vsNational.toFixed(1)}%` : '—'}
+                <span>{stateName} vs National Average (Regular)</span>
+                <span className={allGrades?.[0]?.vsDiff != null ? (allGrades[0].vsDiff >= 0 ? 'text-red-400' : 'text-green-400') : ''}>
+                  {allGrades?.[0]?.vsDiff != null ? `${allGrades[0].vsDiff >= 0 ? '+' : ''}${allGrades[0].vsDiff.toFixed(1)}%` : '—'}
                 </span>
               </div>
               <div className="w-full bg-slate-700 rounded-full h-2.5 relative">
-                {vsNational != null && (
+                {allGrades?.[0]?.vsDiff != null && (
                   <>
                     <div className="absolute top-0 left-1/2 w-0.5 h-2.5 bg-slate-500" />
                     <div
-                      className={`absolute top-0 h-2.5 rounded-full ${vsNational >= 0 ? 'bg-red-500' : 'bg-green-500'}`}
+                      className={`absolute top-0 h-2.5 rounded-full ${allGrades[0].vsDiff >= 0 ? 'bg-red-500' : 'bg-green-500'}`}
                       style={{
-                        left: vsNational >= 0 ? '50%' : `${50 + Math.max(vsNational, -20)}%`,
-                        width: `${Math.min(Math.abs(vsNational), 20)}%`,
+                        left: allGrades[0].vsDiff >= 0 ? '50%' : `${50 + Math.max(allGrades[0].vsDiff, -20)}%`,
+                        width: `${Math.min(Math.abs(allGrades[0].vsDiff), 20)}%`,
                       }}
                     />
                   </>
                 )}
               </div>
             </div>
-            {/* vs PADD bar */}
-            <div>
-              <div className="flex justify-between text-xs text-slate-400 mb-1">
-                <span>vs {padd?.name} Average</span>
-                <span className={vsPadd != null ? (vsPadd >= 0 ? 'text-red-400' : 'text-green-400') : ''}>
-                  {vsPadd != null ? `${vsPadd >= 0 ? '+' : ''}${vsPadd.toFixed(1)}%` : '—'}
-                </span>
-              </div>
-              <div className="w-full bg-slate-700 rounded-full h-2.5 relative">
-                {vsPadd != null && (
-                  <>
-                    <div className="absolute top-0 left-1/2 w-0.5 h-2.5 bg-slate-500" />
-                    <div
-                      className={`absolute top-0 h-2.5 rounded-full ${vsPadd >= 0 ? 'bg-red-500' : 'bg-green-500'}`}
-                      style={{
-                        left: vsPadd >= 0 ? '50%' : `${50 + Math.max(vsPadd, -20)}%`,
-                        width: `${Math.min(Math.abs(vsPadd), 20)}%`,
-                      }}
-                    />
-                  </>
-                )}
-              </div>
-            </div>
-            {/* Seasonal position */}
-            {seasonal && (
-              <div>
-                <div className="flex justify-between text-xs text-slate-400 mb-1">
-                  <span>vs {seasonal.yearsIncluded}Y Seasonal Avg (wk {seasonal.isoWeek})</span>
-                  <span className={seasonal.deltaPct >= 0 ? 'text-red-400' : 'text-green-400'}>
-                    {seasonal.deltaPct >= 0 ? '+' : ''}{seasonal.deltaPct.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="w-full bg-slate-700 rounded-full h-2.5 relative">
-                  <div className="absolute top-0 left-1/2 w-0.5 h-2.5 bg-slate-500" />
-                  <div
-                    className={`absolute top-0 h-2.5 rounded-full ${seasonal.deltaPct >= 0 ? 'bg-red-500' : 'bg-green-500'}`}
-                    style={{
-                      left: seasonal.deltaPct >= 0 ? '50%' : `${50 + Math.max(seasonal.deltaPct, -20)}%`,
-                      width: `${Math.min(Math.abs(seasonal.deltaPct), 20)}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            )}
           </div>
-          {!statePrice && (
+          {!allGrades?.[0]?.statePrice && (
             <p className="text-xs text-slate-500 mt-4">
-              EIA does not report individual prices for {stateName}. The PADD regional average is shown instead.
+              Awaiting AAA data for {stateName}.
             </p>
           )}
         </div>
       </div>
 
       {/* No data note */}
-      {!statePrice && (
+      {!allGrades?.[0]?.statePrice && (
         <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-4">
           <p className="text-sm text-amber-300">
             <strong>Note:</strong> The EIA does not publish weekly retail gasoline prices for every state.
-            {stateName} is part of the {padd?.name} region — the PADD average (${ paddPrice?.toFixed(3) ?? '—'}/gal) is shown as a proxy.
+            {stateName} is part of the {padd?.name} region. Please check back for regional price data.
           </p>
         </div>
       )}

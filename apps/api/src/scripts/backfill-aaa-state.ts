@@ -29,6 +29,12 @@ import {
 
 import type { AaaStateAggregateRow } from '@fuelripple/db';
 import { clearCache } from '../services/cache';
+import { STATE_INFO } from '../utils/regionMapper';
+
+/** Convert EIA duoarea code (e.g. 'SCO') to 2-letter state abbr (e.g. 'CO'). Falls back to the code itself. */
+function duoareaToAbbr(region: string): string {
+  return STATE_INFO[region]?.abbr ?? region;
+}
 
 interface BackfillOptions {
   start?: string;
@@ -112,11 +118,12 @@ async function main(): Promise<void> {
     const stateMap = new Map<string, AaaStateAggregateRow>();
 
     for (const row of rawData) {
-      const key = `${row.time}|${row.region}`;
+      const stateAbbr = duoareaToAbbr(row.region);
+      const key = `${row.time}|${stateAbbr}`;
       if (!stateMap.has(key)) {
         stateMap.set(key, {
           time: new Date(row.time),
-          state: row.region,
+          state: stateAbbr,
           regular: null,
           mid_grade: null,
           premium: null,

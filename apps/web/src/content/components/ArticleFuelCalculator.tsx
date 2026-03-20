@@ -39,8 +39,9 @@ export function ArticleFuelCalculator() {
       <form onSubmit={handleCalculate} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-slate-300 mb-1">Annual Miles</label>
+            <label htmlFor="annualMiles" className="block text-sm text-slate-300 mb-1">Annual Miles</label>
             <input
+              id="annualMiles"
               type="number"
               value={inputs.annualMiles}
               onChange={(e) =>
@@ -50,8 +51,9 @@ export function ArticleFuelCalculator() {
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-300 mb-1">Vehicle MPG</label>
+            <label htmlFor="vehicleMPG" className="block text-sm text-slate-300 mb-1">Vehicle MPG</label>
             <input
+              id="vehicleMPG"
               type="number"
               step={0.1}
               value={inputs.vehicleMPG}
@@ -64,8 +66,9 @@ export function ArticleFuelCalculator() {
         </div>
 
         <div>
-          <label className="block text-sm text-slate-300 mb-1">Gas Price ($/gal)</label>
+          <label htmlFor="gasPrice" className="block text-sm text-slate-300 mb-1">Gas Price ($/gal)</label>
           <input
+            id="gasPrice"
             type="number"
             step={0.01}
             value={inputs.currentGasPrice}

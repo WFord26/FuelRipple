@@ -115,9 +115,14 @@ async function main(): Promise<void> {
 
     let query = knex('energy_prices')
       .where('source', 'in', ['aaa', 'aaa_wayback'])
-      .distinct('time')
       .orderBy('time', 'asc')
-      .select('time');
+      .select(
+        // Normalize to UTC midnight so Wayback (T12:00:00Z) and live AAA
+        // (T00:00:00Z) snapshots on the same calendar day merge into one row.
+        knex.raw(`DATE_TRUNC('day', time) AS time`),
+        'metric',
+        'value',
+      );
 
     if (opts.start) {
       query = query.andWhere('time', '>=', new Date(opts.start));
@@ -126,47 +131,49 @@ async function main(): Promise<void> {
       query = query.andWhere('time', '<=', new Date(opts.end));
     }
 
-    const dates = await query;
-    console.log(`✓ Found ${dates.length} unique dates with AAA data`);
+    const rawRows = await query;
+    console.log(`✓ Retrieved ${rawRows.length} price records`);
 
-    if (dates.length === 0) {
+    if (rawRows.length === 0) {
       console.log('⚠️  No AAA data found. Have you run backfill-aaa-wayback.ts first?');
       return;
     }
 
-    // For each date, compute the national average across all regions
+    // Group by calendar date, then by metric, collecting values across all states
     console.log('🧮 Computing national averages...');
+    const dateMetricMap = new Map<string, Map<string, number[]>>();
+
+    for (const row of rawRows) {
+      const dateKey = new Date(row.time).toISOString().split('T')[0];
+      if (!dateMetricMap.has(dateKey)) {
+        dateMetricMap.set(dateKey, new Map());
+      }
+      const metricMap = dateMetricMap.get(dateKey)!;
+      if (!metricMap.has(row.metric)) {
+        metricMap.set(row.metric, []);
+      }
+      metricMap.get(row.metric)!.push(row.value);
+    }
+
+    const avg = (vals: number[]) =>
+      vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+
     const results: AaaNationalAverageRow[] = [];
 
-    for (const { time } of dates) {
-      const pricesByMetric = await knex('energy_prices')
-        .where('source', 'in', ['aaa', 'aaa_wayback'])
-        .andWhere('time', time)
-        .select('metric', 'value');
+    for (const [dateKey, metricMap] of [...dateMetricMap.entries()].sort()) {
+      const regularVals  = metricMap.get('gas_regular')  ?? [];
+      const midgradeVals = metricMap.get('gas_midgrade') ?? [];
+      const premiumVals  = metricMap.get('gas_premium')  ?? [];
+      const dieselVals   = metricMap.get('diesel')       ?? [];
 
-      // Group by metric and compute average
-      const metricMap = new Map<string, number[]>();
-      for (const { metric, value } of pricesByMetric) {
-        if (!metricMap.has(metric)) {
-          metricMap.set(metric, []);
-        }
-        metricMap.get(metric)!.push(value);
-      }
-
-      const avg = (vals: number[]) =>
-        vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-
-      const regularVals   = metricMap.get('gas_regular') ?? [];
-      const midgradeVals  = metricMap.get('gas_midgrade') ?? [];
-      const premiumVals   = metricMap.get('gas_premium') ?? [];
-      const dieselVals    = metricMap.get('diesel') ?? [];
-
+      // Use live AAA data preferentially — it arrives at T00:00:00Z while
+      // Wayback arrives at T12:00:00Z, so just store at midnight.
       results.push({
-        time: new Date(time),
-        regular:   avg(regularVals),
-        mid_grade: avg(midgradeVals),
-        premium:   avg(premiumVals),
-        diesel:    avg(dieselVals),
+        time:        new Date(`${dateKey}T00:00:00Z`),
+        regular:     avg(regularVals),
+        mid_grade:   avg(midgradeVals),
+        premium:     avg(premiumVals),
+        diesel:      avg(dieselVals),
         state_count: regularVals.length,
       });
     }

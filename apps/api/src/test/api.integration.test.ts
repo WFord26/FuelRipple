@@ -55,6 +55,44 @@ jest.mock('@fuelripple/db', () => ({
   upsertRefineryData: jest.fn().mockImplementation(() => Promise.resolve()),
   upsertCapacityData: jest.fn().mockImplementation(() => Promise.resolve()),
   refreshMaterializedViews: jest.fn().mockImplementation(() => Promise.resolve()),
+  getLatestPricesSnapshot: jest.fn().mockImplementation(() => Promise.resolve([
+    { region: 'NUS', value: 3.45, time: new Date().toISOString() },
+  ])),
+  getSeasonalComparison: jest.fn().mockImplementation(() => Promise.resolve([])),
+  getAllStatePrices: jest.fn().mockImplementation(() => Promise.resolve([])),
+  getDataStatus: jest.fn().mockImplementation(() => Promise.resolve([])),
+  // AAA query functions
+  getRecentNationalAverages: jest.fn().mockImplementation((limit = 90) =>
+    Promise.resolve([
+      { time: new Date().toISOString(), regular: 3.45, mid_grade: 3.65, premium: 3.95, diesel: 3.80, state_count: 48 },
+    ])
+  ),
+  getAaaNationalChanges: jest.fn().mockImplementation(() =>
+    Promise.resolve([
+      { grade: 'regular', current_price: 3.45, week_ago_price: 3.40, week_change_pct: 1.47, month_ago_price: 3.30, month_change_pct: 4.55, three_month_ago_price: 3.20, three_month_change_pct: 7.81, year_ago_price: 3.10, year_change_pct: 11.29, as_of: new Date().toISOString() },
+    ])
+  ),
+  getAaaStateLatest: jest.fn().mockImplementation((state: unknown) =>
+    Promise.resolve({ time: new Date().toISOString(), state: String(state).toUpperCase(), regular: 3.50, mid_grade: null, premium: null, diesel: null })
+  ),
+  getAaaStateHistory: jest.fn().mockImplementation(() =>
+    Promise.resolve([{ time: new Date().toISOString(), state: 'CO', regular: 3.50, mid_grade: null, premium: null, diesel: null }])
+  ),
+  getAaaStateChanges: jest.fn().mockImplementation(() =>
+    Promise.resolve([{ grade: 'regular', current_price: 3.50, week_ago_price: 3.45, week_change_pct: 1.45, month_ago_price: 3.35, month_change_pct: 4.48, three_month_ago_price: 3.25, three_month_change_pct: 7.69, year_ago_price: 3.15, year_change_pct: 11.11, as_of: new Date().toISOString() }])
+  ),
+  getAllAaaStatesLatest: jest.fn().mockImplementation(() =>
+    Promise.resolve([{ time: new Date().toISOString(), state: 'CO', regular: 3.50, mid_grade: null, premium: null, diesel: null }])
+  ),
+  getAaaPaddLatest: jest.fn().mockImplementation(() =>
+    Promise.resolve({ time: new Date().toISOString(), padd: 'R20', regular_mean: 3.45, mid_grade_mean: null, premium_mean: null, diesel_mean: null, regular_wtd: null, mid_grade_wtd: null, premium_wtd: null, diesel_wtd: null, state_count: 12 })
+  ),
+  getAaaPaddHistory: jest.fn().mockImplementation(() =>
+    Promise.resolve([{ time: new Date().toISOString(), padd: 'R20', regular_mean: 3.45, mid_grade_mean: null, premium_mean: null, diesel_mean: null, regular_wtd: null, mid_grade_wtd: null, premium_wtd: null, diesel_wtd: null, state_count: 12 }])
+  ),
+  getAllAaaPaddLatest: jest.fn().mockImplementation(() =>
+    Promise.resolve([{ time: new Date().toISOString(), padd: 'R20', regular_mean: 3.45, mid_grade_mean: null, premium_mean: null, diesel_mean: null, regular_wtd: null, mid_grade_wtd: null, premium_wtd: null, diesel_wtd: null, state_count: 12 }])
+  ),
 }));
 
 // 2. Mock cache service — always miss (pass through to DB mock)
@@ -219,5 +257,138 @@ describe('404 handling', () => {
     const res = await request(app).get('/api/v1/nonexistent');
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe('AAA endpoints', () => {
+  it('GET /api/v1/aaa/national returns national average history', async () => {
+    const res = await request(app).get('/api/v1/aaa/national');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(res.body.source).toBe('aaa');
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('GET /api/v1/aaa/national/latest returns current national average', async () => {
+    const res = await request(app).get('/api/v1/aaa/national/latest');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(res.body.data).toHaveProperty('regular');
+  });
+
+  it('GET /api/v1/aaa/national/changes returns change data', async () => {
+    const res = await request(app).get('/api/v1/aaa/national/changes');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('GET /api/v1/aaa/states returns all state latest prices', async () => {
+    const res = await request(app).get('/api/v1/aaa/states');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('GET /api/v1/aaa/state/CO/latest returns latest state price', async () => {
+    const res = await request(app).get('/api/v1/aaa/state/CO/latest');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(res.body.data).toHaveProperty('regular');
+  });
+
+  it('GET /api/v1/aaa/state/CO returns state price history', async () => {
+    const res = await request(app).get('/api/v1/aaa/state/CO');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('GET /api/v1/aaa/state/CO/changes returns state change data', async () => {
+    const res = await request(app).get('/api/v1/aaa/state/CO/changes');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('GET /api/v1/aaa/regions returns all PADD latest prices', async () => {
+    const res = await request(app).get('/api/v1/aaa/regions');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('GET /api/v1/aaa/region/R20/latest returns PADD latest price', async () => {
+    const res = await request(app).get('/api/v1/aaa/region/R20/latest');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(res.body.data).toHaveProperty('padd');
+  });
+
+  it('GET /api/v1/aaa/region/R20 returns PADD price history', async () => {
+    const res = await request(app).get('/api/v1/aaa/region/R20');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+});
+
+describe('Supply endpoints', () => {
+  it('GET /api/v1/supply/utilization returns utilization data', async () => {
+    const res = await request(app).get('/api/v1/supply/utilization');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('data');
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('GET /api/v1/supply/production returns production data', async () => {
+    const res = await request(app).get('/api/v1/supply/production');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('data');
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('GET /api/v1/supply/inventories returns inventory data', async () => {
+    const res = await request(app).get('/api/v1/supply/inventories');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('data');
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('GET /api/v1/supply/health returns supply health data', async () => {
+    const res = await request(app).get('/api/v1/supply/health');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('regions');
+    expect(Array.isArray(res.body.regions)).toBe(true);
+  });
+
+  it('GET /api/v1/supply/flow returns flow data', async () => {
+    const res = await request(app).get('/api/v1/supply/flow');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('data');
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('GET /api/v1/supply/capacity returns capacity data', async () => {
+    const res = await request(app).get('/api/v1/supply/capacity');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('data');
+    expect(Array.isArray(res.body.data)).toBe(true);
   });
 });

@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Test coverage — `@fuelripple/db` queries** — expanded `packages/db/src/__tests__/queries.test.ts`
+  with 38 new tests covering all previously untested query modules:
+  - `aaa.ts`: full coverage (0% → **100%**) across all 13 exported functions —
+    `upsertNationalAverages`, `getRecentNationalAverages`, `getAaaNationalChanges`,
+    `upsertStateAggregates`, `getStateAggregatesForDate`, `getAaaStateLatest`,
+    `getAaaStateHistory`, `getAaaStateChanges`, `getAllAaaStatesLatest`,
+    `upsertPaddAggregates`, `getAaaPaddLatest`, `getAaaPaddHistory`, `getAllAaaPaddLatest`
+  - `supply.ts`: full coverage (0% → **100%**) across all 8 exported functions —
+    `upsertRefineryData`, `getUtilizationByRegion`, `getProductionData`,
+    `getInventoryData`, `getSupplyHealth`, `getFlowData`, `getCapacityData`,
+    `upsertCapacityData`
+  - `createChainableMock()` helper enhanced with `andWhere` and `merge` methods to
+    support upsert and date-range query patterns
+  - Overall `@fuelripple/db` statement coverage: **16.89% → 58.39%**
+- **Test coverage — `@fuelripple/api` integration tests** — extended
+  `apps/api/src/test/api.integration.test.ts` with 16 new endpoint tests and
+  9 additional `@fuelripple/db` mock functions:
+  - AAA route mocks added: `getRecentNationalAverages`, `getAaaNationalChanges`,
+    `getAaaStateLatest`, `getAaaStateHistory`, `getAaaStateChanges`,
+    `getAllAaaStatesLatest`, `getAaaPaddLatest`, `getAaaPaddHistory`, `getAllAaaPaddLatest`
+  - New `AAA endpoints` describe block exercises all 10 AAA routes:
+    `/national`, `/national/latest`, `/national/changes`, `/states`,
+    `/state/:abbr/latest`, `/state/:abbr`, `/state/:abbr/changes`,
+    `/regions`, `/region/:padd/latest`, `/region/:padd`
+  - New `Supply endpoints` describe block exercises all 6 supply routes:
+    `/utilization`, `/production`, `/inventories`, `/health`, `/flow`, `/capacity`
+  - Previously failing `prices/current` tests (`getLatestPricesSnapshot is not a
+    function`) now pass — mock was present but Turbo cache was replaying a stale run
+  - API route coverage improvements: `aaa.ts` **17% → 74.5%**, `supply.ts`
+    **13% → 82.95%**, overall API statement coverage **37.5% → 53.59%**
+  - Total API test count: **51 → 67 tests** across 3 suites (all passing)
+
 ---
 
 ## [1.1.0-beta.3] - 2026-03-20

@@ -28,11 +28,13 @@ export default function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-white">
-                <span className="text-primary-400">Fuel</span>Ripple
-              </h1>
-            </div>
+            <Link to="/" className="flex items-center">
+              <img 
+                src="/logo.svg" 
+                alt="FuelRipple" 
+                className="h-12 w-auto"
+              />
+            </Link>
 
             {/* Desktop nav */}
             <nav className="hidden md:flex space-x-1">
@@ -104,21 +106,23 @@ export default function Layout() {
 
       {/* Footer */}
       <footer className="bg-slate-800 border-t border-slate-700 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm text-slate-400">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 text-base text-slate-400">
             {/* Brand */}
-            <div>
-              <span className="text-lg font-bold text-white">
-                <span className="text-primary-400">Fuel</span>Ripple
-              </span>
-              <p className="mt-1 text-slate-500">
+            <div className="flex flex-col items-center sm:items-start">
+              <img 
+                src="/logo-stacked-animated.svg" 
+                alt="FuelRipple" 
+                className="w-40 h-52 mb-3"
+              />
+              <p className="mt-1 text-slate-500 text-center sm:text-left">
                 Tracking US gasoline prices &amp; consumer impact
               </p>
             </div>
 
             {/* Links */}
             <div className="space-y-1.5">
-              <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Resources</p>
+              <p className="text-sm uppercase tracking-wider text-slate-500 font-semibold">Resources</p>
               <Link to="/methodology" className="block hover:text-slate-200 transition-colors">Methodology</Link>
               <Link to="/data-status" className="block hover:text-slate-200 transition-colors">Data Status</Link>
               <a
@@ -133,14 +137,14 @@ export default function Layout() {
 
             {/* Data sources */}
             <div className="space-y-1.5">
-              <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Data Sources</p>
+              <p className="text-sm uppercase tracking-wider text-slate-500 font-semibold">Data Sources</p>
               <p>EIA — Weekly Petroleum Status Report</p>
               <p>FRED — Federal Reserve Economic Data</p>
               <p>BLS — CPI &amp; PPI Indicators</p>
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-700/60 text-center text-xs text-slate-600">
+          <div className="mt-6 pt-4 border-t border-slate-700/60 text-center text-sm text-slate-600">
             <div>© {new Date().getFullYear()} FuelRipple · Built with React, Express &amp; TimescaleDB</div>
             <div className="mt-1 text-slate-700">
               Web {webVersion} · API {apiVersion || 'loading...'}

@@ -44,14 +44,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - API route coverage improvements: `aaa.ts` **17% → 74.5%**, `supply.ts`
     **13% → 82.95%**, overall API statement coverage **37.5% → 53.59%**
   - Total API test count: **51 → 67 tests** across 3 suites (all passing)
-
----
-
----
-
-## [1.1.0-beta.3] - 2026-03-20
-
-### Added
 - **Historical fuel prices page overhaul** (`apps/web/src/pages/Historical.tsx`) — complete
   redesign with AAA daily data, all 4 fuel grades, and enhanced Recharts visualization:
   - Full support for all 4 AAA fuel grades (Regular, Mid-Grade, Premium, Diesel) replacing
@@ -99,19 +91,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated weekly correlation analysis to source gas prices from AAA national
     averages instead of EIA weekly data, improving accuracy for pump price lag
     calculations
-
-### Changed
-- **Correlation price series logic** (`getCorrelationSeries` in `@fuelripple/db`)
-  now uses `aaa_national_averages` table instead of `energy_prices` for gas_regular
-  metric, and filters crude_wti to source='yahoo' for Yahoo Finance daily data
-- Import chart component updated in Correlation page to include `LineChart` from
-  Recharts for daily crude visualization
-
----
-
-## [1.1.0-beta.2] - 2026-03-20
-
-### Added
 - **AAA-derived PADD regional aggregates** — daily PADD-level gas price data computed
   from existing per-state AAA data, replacing the need for weekly EIA regional series:
   - New table `aaa_padd_aggregates` (TimescaleDB hypertable, 30-day chunks) stores two
@@ -174,16 +153,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Data quality metrics (`state_count` tracking success rate)
     - Limitations (stale cache behavior on Wayback fallback, weekday-only intraday)
     - Test strategy and local development instructions
-
-### Changed
-- **Job queue `processAAAPrices()`** now invokes `aaaClientV2` instead of `aaaClient`
-  for improved concurrency and resilience
-
----
-
-## [1.1.0-beta.1] - 2026-03-20
-
-### Added
 - **Wayback Machine historical backfill** — new script `apps/api/src/scripts/backfill-aaa-wayback.ts`
   recovers state-level AAA gas prices from Internet Archive snapshots of
   `gasprices.aaa.com/state-gas-price-averages/` dating back to Nov 2017:
@@ -212,8 +181,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`getAllAaaStatePrices()`** client helper in `apps/web/src/api/client.ts` — fetches
   all-states latest AAA data for the `/state-prices` comparison page
 - **`getStatePrice(abbr)`** client helper — EIA fallback for states without AAA data
+- **Version display in footer** — frontend and backend versions now displayed in the site 
+  footer, pulled from respective `package.json` files:
+  - *Frontend*: version injected at build time by Vite (`__APP_VERSION__` global from 
+    `apps/web/package.json`)
+  - *API*: version endpoint `/api/v1/health` returns API version from 
+    `apps/api/package.json` with 1-hour cache TTL
+  - *Frontend hook*: `useApiVersion()` fetches API version using TanStack Query for 
+    client-side display in Layout footer
+- **Blog article visualizations** — five existing blog articles enhanced with interactive
+  charts, data tables, and callout boxes:
+  - `ArticleChart` component — responsive Recharts-based bar/line charts with
+    multi-series support and auto-assigned color palette; exported from
+    `apps/web/src/content/components/ArticleChart.tsx`
+  - `ArticleTable` component — styled data table accepting `headers` + `rows`
+    (keyed objects matching header strings exactly); co-located in the same file
+  - `ArticleCallout` component — color-coded info/warning/tip highlight boxes;
+    co-located in the same file
+  - All components registered in `apps/web/src/content/components/index.tsx` for
+    MDX provider and available via named import in each `.mdx` file
+  - *rockets-and-feathers*: asymmetry visualization bar chart + household cost
+    impact table
+  - *why-gas-prices-spike-refineries*: PADD supply profile table + West Coast
+    outage history table + callouts
+  - *padd-regions-explained*: PADD premium bar chart (West Coast vs. national)
+    + regional inequality callout
+  - *2022-energy-crisis-geopolitics*: PADD regional price impact table + timeline
+      callouts
+  - *monthly-fuel-cost-tracker*: budget scenario table + disruption index line
+    chart + tip callouts
+- **AAA National Averages** — new `aaa_national_averages` hypertable stores daily 
+  USA-wide average gas prices (regular, mid-grade, premium, diesel) computed from
+  per-state AAA data. Includes `state_count` field for data quality tracking. 
+  Job queue processes daily at 9 AM ET; backfill script `backfill-aaa-national.ts` 
+  computes historical averages from existing per-state data.
+- **Latest Prices Snapshot** — new `latest_prices` table provides O(1) lookup for 
+  current prices by region and metric, eliminating hypertable scans for 
+  `/api/v1/prices/current` endpoint.
+- **AAA State Aggregates** — new `aaa_state_aggregates` table pre-aggregates per-state 
+  AAA prices at the state level, enabling fast state-level queries without scanning 
+  raw `energy_prices`.
+- **Cache TTL Constant** — `CACHE_TTL.AAA_NATIONAL` (24 hours) added to `@fuelripple/shared` 
+  to standardize caching for daily update cycles.
+- **AAA National routes** — `GET /api/v1/aaa/national` and `GET /api/v1/aaa/national/latest` 
+  serving daily all-grades national averages (regular, mid-grade, premium, diesel).
+- **Dashboard AAA integration** — Dashboard National Average section replaced with 
+  AAA-sourced data table showing all grades with week/month/3-month/year historical 
+  comparisons and percentage change indicators.
+- **Price Changes Cache** — new `price_changes_cache` table pre-computes week/month/
+  3-month/year price deltas for every (metric, region) combination. Refreshed after 
+  each EIA ingest so `/prices/changes` is an O(1) key lookup rather than a 
+  multi-point hypertable scan.
+- **AAA National Changes endpoint** — `GET /api/v1/aaa/national/changes` computes 
+  7-day/30-day/90-day/1-year lookbacks server-side from `aaa_national_averages` for 
+  all four grades, returning a compact snapshot. Eliminates the need for the frontend  
+  to download 365 rows to perform four price lookups.
+- **Dashboard payload reduction** — Dashboard now calls `/aaa/national/changes` instead 
+  of fetching 365-row history and looping client-side, reducing the dashboard 
+  initial payload significantly.
+- **State-level AAA queries** — new DB query functions in `@fuelripple/db` for fast 
+  state-level lookups:
+  - `getAaaStateLatest(state)` — current AAA average for all 4 grades in a state
+  - `getAaaStateHistory(state, limit)` — recent historical AAA prices for a state (default 90 days)
+  - `getAaaStateChanges(state)` — pre-computed 7d/30d/90d/1y price deltas per grade in a state
+- **State-level AAA endpoints** — new routes in `/api/v1/aaa/state/:abbr`:
+  - `GET /api/v1/aaa/state/:abbr/latest` — current state-level averages
+  - `GET /api/v1/aaa/state/:abbr` — historical state-level prices (limit param, default 90)
+  - `GET /api/v1/aaa/state/:abbr/changes` — pre-computed price changes by grade
+- **State-level AAA client functions** — new helpers in `apps/web/src/api/client.ts`:
+  - `getAaaStateLatest(abbr)` — fetch current state prices
+  - `getAaaStateHistory(abbr, limit)` — fetch historical state prices
+  - `getAaaStateChanges(abbr)` — fetch pre-computed state price changes
+- **State detail pages now AAA-powered** — [State].tsx completely refactored to use 
+  state-level AAA data instead of EIA regional data:
+  - Pricing source: AAA state aggregates (daily, covers all 50 states + DC)
+  - Historical charts: 90-day AAA state history with fuel-type toggle (regular/diesel)
+  - Price changes: All 4 lookback periods (7d/30d/90d/1y) from pre-computed server deltas
+  - National comparison: Shows state vs. AAA national average with % variance badge
+  - Simplified UI: Removed PADD regional reference cards (AAA is state-level only)
+  - All 4 fuel grades: regular, mid-grade, premium, diesel (displayed by toggle)
+
 
 ### Changed
+- **Correlation price series logic** (`getCorrelationSeries` in `@fuelripple/db`)
+  now uses `aaa_national_averages` table instead of `energy_prices` for gas_regular
+  metric, and filters crude_wti to source='yahoo' for Yahoo Finance daily data
+- Import chart component updated in Correlation page to include `LineChart` from
+  Recharts for daily crude visualization
+- **Job queue `processAAAPrices()`** now invokes `aaaClientV2` instead of `aaaClient`
+  for improved concurrency and resilience
 - **State detail page refactored** (`apps/web/src/pages/State.tsx`):
   - *Current Prices* section replaced the single-grade toggle with a 4-row table
     (Regular, Mid-Grade, Premium, Diesel) showing state price, national average, and
@@ -256,98 +312,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **L1 LRU cache serving stale prices** — after a fresh scrape the Express server's
   in-process LRU cache still served old data until its 5-minute TTL expired or the
   server restarted. Resolved by restarting the dev server after each data refresh
-
----
-
-## [1.1.0-beta.0] - 2026-03-19
-
-### Added (Phase 0 — Blog & Footer)
-- **Version display in footer** — frontend and backend versions now displayed in the site 
-  footer, pulled from respective `package.json` files:
-  - *Frontend*: version injected at build time by Vite (`__APP_VERSION__` global from 
-    `apps/web/package.json`)
-  - *API*: version endpoint `/api/v1/health` returns API version from 
-    `apps/api/package.json` with 1-hour cache TTL
-  - *Frontend hook*: `useApiVersion()` fetches API version using TanStack Query for 
-    client-side display in Layout footer
-- **Blog article visualizations** — five existing blog articles enhanced with interactive
-  charts, data tables, and callout boxes:
-  - `ArticleChart` component — responsive Recharts-based bar/line charts with
-    multi-series support and auto-assigned color palette; exported from
-    `apps/web/src/content/components/ArticleChart.tsx`
-  - `ArticleTable` component — styled data table accepting `headers` + `rows`
-    (keyed objects matching header strings exactly); co-located in the same file
-  - `ArticleCallout` component — color-coded info/warning/tip highlight boxes;
-    co-located in the same file
-  - All components registered in `apps/web/src/content/components/index.tsx` for
-    MDX provider and available via named import in each `.mdx` file
-  - *rockets-and-feathers*: asymmetry visualization bar chart + household cost
-    impact table
-  - *why-gas-prices-spike-refineries*: PADD supply profile table + West Coast
-    outage history table + callouts
-  - *padd-regions-explained*: PADD premium bar chart (West Coast vs. national)
-    + regional inequality callout
-  - *2022-energy-crisis-geopolitics*: PADD regional price impact table + timeline
-      callouts
-  - *monthly-fuel-cost-tracker*: budget scenario table + disruption index line
-    chart + tip callouts
-
-
-### Added (Phase 1 — AAA Data Layer)
-- **AAA National Averages** — new `aaa_national_averages` hypertable stores daily 
-  USA-wide average gas prices (regular, mid-grade, premium, diesel) computed from
-  per-state AAA data. Includes `state_count` field for data quality tracking. 
-  Job queue processes daily at 9 AM ET; backfill script `backfill-aaa-national.ts` 
-  computes historical averages from existing per-state data.
-- **Latest Prices Snapshot** — new `latest_prices` table provides O(1) lookup for 
-  current prices by region and metric, eliminating hypertable scans for 
-  `/api/v1/prices/current` endpoint.
-- **AAA State Aggregates** — new `aaa_state_aggregates` table pre-aggregates per-state 
-  AAA prices at the state level, enabling fast state-level queries without scanning 
-  raw `energy_prices`.
-- **Cache TTL Constant** — `CACHE_TTL.AAA_NATIONAL` (24 hours) added to `@fuelripple/shared` 
-  to standardize caching for daily update cycles.
-- **AAA National routes** — `GET /api/v1/aaa/national` and `GET /api/v1/aaa/national/latest` 
-  serving daily all-grades national averages (regular, mid-grade, premium, diesel).
-- **Dashboard AAA integration** — Dashboard National Average section replaced with 
-  AAA-sourced data table showing all grades with week/month/3-month/year historical 
-  comparisons and percentage change indicators.
-
-### Added (Phase 2 — Server-Side Pre-computed Metrics)
-- **Price Changes Cache** — new `price_changes_cache` table pre-computes week/month/
-  3-month/year price deltas for every (metric, region) combination. Refreshed after 
-  each EIA ingest so `/prices/changes` is an O(1) key lookup rather than a 
-  multi-point hypertable scan.
-- **AAA National Changes endpoint** — `GET /api/v1/aaa/national/changes` computes 
-  7-day/30-day/90-day/1-year lookbacks server-side from `aaa_national_averages` for 
-  all four grades, returning a compact snapshot. Eliminates the need for the frontend  
-  to download 365 rows to perform four price lookups.
-- **Dashboard payload reduction** — Dashboard now calls `/aaa/national/changes` instead 
-  of fetching 365-row history and looping client-side, reducing the dashboard 
-  initial payload significantly.
-
-### Added (Phase 3 — State-Level AAA Data)
-- **State-level AAA queries** — new DB query functions in `@fuelripple/db` for fast 
-  state-level lookups:
-  - `getAaaStateLatest(state)` — current AAA average for all 4 grades in a state
-  - `getAaaStateHistory(state, limit)` — recent historical AAA prices for a state (default 90 days)
-  - `getAaaStateChanges(state)` — pre-computed 7d/30d/90d/1y price deltas per grade in a state
-- **State-level AAA endpoints** — new routes in `/api/v1/aaa/state/:abbr`:
-  - `GET /api/v1/aaa/state/:abbr/latest` — current state-level averages
-  - `GET /api/v1/aaa/state/:abbr` — historical state-level prices (limit param, default 90)
-  - `GET /api/v1/aaa/state/:abbr/changes` — pre-computed price changes by grade
-- **State-level AAA client functions** — new helpers in `apps/web/src/api/client.ts`:
-  - `getAaaStateLatest(abbr)` — fetch current state prices
-  - `getAaaStateHistory(abbr, limit)` — fetch historical state prices
-  - `getAaaStateChanges(abbr)` — fetch pre-computed state price changes
-- **State detail pages now AAA-powered** — [State].tsx completely refactored to use 
-  state-level AAA data instead of EIA regional data:
-  - Pricing source: AAA state aggregates (daily, covers all 50 states + DC)
-  - Historical charts: 90-day AAA state history with fuel-type toggle (regular/diesel)
-  - Price changes: All 4 lookback periods (7d/30d/90d/1y) from pre-computed server deltas
-  - National comparison: Shows state vs. AAA national average with % variance badge
-  - Simplified UI: Removed PADD regional reference cards (AAA is state-level only)
-  - All 4 fuel grades: regular, mid-grade, premium, diesel (displayed by toggle)
 
 ### Optimized
 - **Data Layer Caching** — AAA backfill script now invalidates Redis cache after 

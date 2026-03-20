@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Historical fuel prices page overhaul** (`apps/web/src/pages/Historical.tsx`) — complete
+  redesign with AAA daily data, all 4 fuel grades, and enhanced Recharts visualization:
+  - Full support for all 4 AAA fuel grades (Regular, Mid-Grade, Premium, Diesel) replacing
+    the EIA single-grade approach; users can toggle any combination for comparison
+  - Regional drill-down: National (US) → PADD region (5 regions) → Individual state (51 states)
+  - Time range buttons: 7D, 30D, 90D, 1Y, 5Y, All-Time (configurable limit parameter)
+  - **Recharts LineChart** with multi-series support (replaces Elastic Charts):
+    - Clean, responsive design scales to any screen size
+    - Tooltip shows prices for all selected grades on hover
+    - Legend dynamically updates based on active fuel toggles
+    - Smooth line interpolation for volatility visualization
+  - **7-day Moving Average overlay** — optional toggle to smooth out daily fluctuations
+    and reveal underlying trends; computed client-side for both regular and diesel
+  - **Enhanced statistics cards** for each active fuel grade showing:
+    - Current price ($X.XX) with period-over-period % change (colored red/green)
+    - 7-day and 30-day % changes for short-term volatility tracking
+    - Min, Max, and Average prices across the selected time range
+  - Data source attribution footer explains AAA (daily state aggregates, population-weighted
+    regional means) vs Yahoo Finance (crude oil feeds)
+  - Client-side API method `getAaaPaddHistory(padd, limit)` added to fetch PADD historical
+    data alongside national and state endpoints
+- **Daily crude oil and gas data endpoints** for intraday correlation analysis:
+  - New DB query helpers in `@fuelripple/db`:
+    - `getDailyCrudePrices(metric, days)` — daily OHLC crude oil from Yahoo Finance
+      (WTI/Brent) with open/high/low/close/average prices
+    - `getDailyAaaGasPrices(metric, days)` — daily national average gas prices from
+      AAA, replacing EIA weekly bucketing for fresher data
+    - `getDailyCorrelationSeries(days)` — aligned daily gas (AAA) + crude (Yahoo)
+      by date for dual-axis charting without weekly aggregation
+  - Three new API endpoints in correlation route:
+    - `GET /api/v1/correlation/daily-crude` — daily WTI/Brent prices (6-hour cache
+      during trading hours)
+    - `GET /api/v1/correlation/daily-gas-aaa` — daily AAA gas prices (24-hour cache)
+    - `GET /api/v1/correlation/daily-series` — pre-aligned daily gas+crude series
+  - New client API methods in `apps/web/src/api/client.ts`:
+    - `getDailyCrudePrices()` — fetch daily crude
+    - `getDailyAaaGasPrices()` — fetch daily AAA gas
+    - `getDailyCorrelationSeries()` — fetch aligned daily series
+- **Enhanced Correlation page** with real-time crude oil tracking:
+  - New "Daily WTI Crude Oil — Last Year" chart showing real-time (15-min delayed)
+    Yahoo Finance prices with OHLC visualization
+  - Line chart displays Close (solid), Daily Average (dashed), High, Low, Open prices
+  - Intraday data refreshes every 6 hours during NYSE trading hours for fresh market
+    rates instead of stale weekly EIA data
+  - Updated weekly correlation analysis to source gas prices from AAA national
+    averages instead of EIA weekly data, improving accuracy for pump price lag
+    calculations
+
+### Changed
+- **Correlation price series logic** (`getCorrelationSeries` in `@fuelripple/db`)
+  now uses `aaa_national_averages` table instead of `energy_prices` for gas_regular
+  metric, and filters crude_wti to source='yahoo' for Yahoo Finance daily data
+- Import chart component updated in Correlation page to include `LineChart` from
+  Recharts for daily crude visualization
+
 ---
 
 ## [1.1.0-beta.2] - 2026-03-20
@@ -132,6 +188,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upsert, so the chart history query (`WHERE state = 'CO'`) resolves correctly
 
 ### Fixed
+- **Downstream page — Sankey diagram pass-through modeling** — the `computeSankeyData()`
+  function was displaying an economically implausible split: carriers appeared to absorb
+  only ~10% of freight cost increases while consumers bore ~90%, contradicting the
+  elasticity constants (0.10–0.20). Root cause: pass-through logic was not properly
+  modeling the elasticity ratio `avgCPIIncrease / freightRateIncreasePercent`. Fixed by:
+  - Simplified Sankey from 7 nodes to 5 focused nodes (Freight Rate → {CPI pass-through,
+    Absorbed by carriers} → {Food, Other Goods}), reducing visualization confusion
+  - Freight cost split now correctly models elasticity: ~15% flows to consumers as CPI,
+    ~85% absorbed by carriers/retailers (compression of logistics margins)
+  - Updated legend to explicitly show the 15%/85% split backed by BLS elasticity data
+  - Removed unused intermediate nodes (diesel, trucking costs, freight surcharges as
+    separate nodes) that mixed dollars and percentages; now purely percentage-based
+  - Pass-through ratio calculated as `Math.max(0.05, Math.min(0.25, elasticity))` to
+    clamp to realistic bounds and prevent edge-case visualization glitches
 - **Stale T06:00:00Z duplicate rows** — the first run of `fetch-aaa-today` stored
   records at local-midnight (CDT = UTC−6, yielding `T06:00:00Z`), conflicting with
   seed data already at `T00:00:00Z` for the same date. Fixed by switching to

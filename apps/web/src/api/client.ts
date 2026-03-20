@@ -189,6 +189,30 @@ export const getCorrelationPriceSeries = async (region = 'US', weeks = 260) => {
   return response.data.data as { week: string; gas_value: number; crude_value: number }[];
 };
 
+// Daily crude oil prices from Yahoo Finance
+export const getDailyCrudePrices = async (metric: 'crude_wti' | 'crude_brent' = 'crude_wti', days = 365) => {
+  const response = await apiClient.get('/correlation/daily-crude', {
+    params: { metric, days },
+  });
+  return response.data.data as { date: string; open: number; high: number; low: number; close: number; avg: number }[];
+};
+
+// Daily AAA gas prices (national average)
+export const getDailyAaaGasPrices = async (metric = 'gas_regular', days = 365) => {
+  const response = await apiClient.get('/correlation/daily-gas-aaa', {
+    params: { metric, days },
+  });
+  return response.data.data as { date: string; value: number }[];
+};
+
+// Daily correlation series: AAA gas + Yahoo crude aligned by date
+export const getDailyCorrelationSeries = async (days = 365) => {
+  const response = await apiClient.get('/correlation/daily-series', {
+    params: { days },
+  });
+  return response.data.data as { date: string; gas_value: number; crude_wti_value: number; crude_brent_value: number }[];
+};
+
 // Events
 export const getEvents = async (params?: {
   start?: string;
@@ -360,5 +384,14 @@ export const getAaaPaddRegions = async (): Promise<AaaPaddAggregate[]> => {
 /** Latest AAA-derived PADD aggregate for a single region */
 export const getAaaPaddRegion = async (padd: string): Promise<AaaPaddAggregate | null> => {
   const response = await apiClient.get(`/aaa/region/${padd}/latest`);
+  return response.data.data;
+};
+
+/** Recent daily AAA-derived PADD aggregates (default 90 days, newest first) */
+export const getAaaPaddHistory = async (
+  padd: string,
+  limit = 90
+): Promise<AaaPaddAggregate[]> => {
+  const response = await apiClient.get(`/aaa/region/${padd}`, { params: { limit } });
   return response.data.data;
 };

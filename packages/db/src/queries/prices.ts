@@ -480,15 +480,15 @@ export async function getCorrelationSeries(options: {
   })();
   const end = endDate ?? new Date().toISOString().slice(0, 10);
 
+  // Updated to use AAA national averages for gas_regular instead of EIA
   return knex.raw(`
     WITH
       gas_weekly AS (
         SELECT
           DATE_TRUNC('week', time) AS week,
           AVG(value)               AS gas_value
-        FROM   energy_prices
+        FROM   aaa_national_averages
         WHERE  metric = 'gas_regular'
-          AND  region = ?
           AND  time BETWEEN ?::timestamptz AND ?::timestamptz
         GROUP BY 1
       ),
@@ -499,6 +499,7 @@ export async function getCorrelationSeries(options: {
         FROM   energy_prices
         WHERE  metric = 'crude_wti'
           AND  region = 'US'
+          AND  source = 'yahoo'
           AND  time BETWEEN ?::timestamptz AND ?::timestamptz
         GROUP BY 1
       )
@@ -510,7 +511,7 @@ export async function getCorrelationSeries(options: {
     JOIN   crude_weekly c USING (week)
     ORDER BY 1
     LIMIT  ?
-  `, [gasRegion, start, end, start, end, weeks])
+  `, [start, end, start, end, weeks])
     .then((r: any) => r.rows);
 }
 
@@ -603,4 +604,121 @@ export async function detectDataGaps(
       row.actual_next_time && row.expected_time < row.actual_next_time
     )
   );
+}
+
+/**
+ * Get daily crude oil prices (WTI and Brent) from Yahoo Finance.
+ * Returns daily OHLC data sorted newest → oldest, limited to last N days.
+ */
+export async function getDailyCrudePrices(
+  days: number = 365,
+  metric: 'crude_wti' | 'crude_brent' = 'crude_wti'
+): Promise<any[]> {
+  const knex = getKnex();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+
+  return knex.raw(`
+    SELECT
+      DATE(time)::text as date,
+      metric,
+      MIN(value) as low,
+      MAX(value) as high,
+      (ARRAY_AGG(value ORDER BY time))[1] as open,
+      (ARRAY_AGG(value ORDER BY time DESC))[1] as close,
+      AVG(value) as avg,
+      COUNT(*) as data_points
+    FROM energy_prices
+    WHERE metric = ?
+      AND region = 'US'
+      AND source = 'yahoo'
+      AND time >= ?::timestamptz
+    GROUP BY DATE(time), metric
+    ORDER BY DATE(time) DESC
+    LIMIT ?
+  `, [metric, cutoff.toISOString(), days]).then(result => result.rows);
+}
+
+/**
+ * Get daily gas prices from AAA (national average).
+ * Returns daily prices sorted newest → oldest, limited to last N days.
+ * Uses aaa_national_averages table for efficiency.
+ */
+export async function getDailyAaaGasPrices(
+  days: number = 365,
+  metric: string = 'gas_regular'
+): Promise<any[]> {
+  const knex = getKnex();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+
+  return knex.raw(`
+    SELECT
+      time::text as date,
+      metric,
+      value,
+      value as close
+    FROM aaa_national_averages
+    WHERE metric = ?
+      AND time >= ?::timestamptz
+    ORDER BY time DESC
+    LIMIT ?
+  `, [metric, cutoff.toISOString(), days]).then(result => result.rows);
+}
+
+/**
+ * Get daily correlation series: aligned daily gas (AAA) and crude (Yahoo) prices.
+ * Returns both metrics as daily points (not weekly buckets) for intraday resolution.
+ */
+export async function getDailyCorrelationSeries(
+  days: number = 365
+): Promise<{ date: string; gas_value: number; crude_wti_value: number; crude_brent_value: number }[]> {
+  const knex = getKnex();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+
+  return knex.raw(`
+    WITH gas_daily AS (
+      SELECT
+        DATE(time) as date,
+        AVG(value) as gas_value
+      FROM aaa_national_averages
+      WHERE metric = 'gas_regular'
+        AND time >= ?::timestamptz
+      GROUP BY DATE(time)
+    ),
+    crude_wti_daily AS (
+      SELECT
+        DATE(time) as date,
+        AVG(value) as crude_wti_value
+      FROM energy_prices
+      WHERE metric = 'crude_wti'
+        AND region = 'US'
+        AND source = 'yahoo'
+        AND time >= ?::timestamptz
+      GROUP BY DATE(time)
+    ),
+    crude_brent_daily AS (
+      SELECT
+        DATE(time) as date,
+        AVG(value) as crude_brent_value
+      FROM energy_prices
+      WHERE metric = 'crude_brent'
+        AND region = 'US'
+        AND source = 'yahoo'
+        AND time >= ?::timestamptz
+      GROUP BY DATE(time)
+    )
+    SELECT
+      g.date::text,
+      g.gas_value,
+      c_wti.crude_wti_value,
+      c_brent.crude_brent_value
+    FROM gas_daily g
+    LEFT JOIN crude_wti_daily c_wti USING (date)
+    LEFT JOIN crude_brent_daily c_brent USING (date)
+    ORDER BY g.date DESC
+    LIMIT ?
+  `, [cutoff.toISOString(), cutoff.toISOString(), cutoff.toISOString(), days])
+    .then(result => result.rows);
 }

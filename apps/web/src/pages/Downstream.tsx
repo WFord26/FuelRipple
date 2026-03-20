@@ -27,50 +27,55 @@ interface DownstreamData {
 
 // ── Sankey helpers ────────────────────────────────────────────────────────────
 const NODE_COLORS = [
-  '#3b82f6', // 0 Diesel – blue
-  '#f59e0b', // 1 Trucking – amber
-  '#eab308', // 2 Freight Rate – yellow
-  '#ef4444', // 3 Consumer CPI (total) – red
-  '#f97316', // 4 Food & Grocery (subset of CPI) – orange
-  '#64748b', // 5 Absorbed by Carriers – slate
-  '#475569', // 6 Non-Food Goods (subset of CPI) – slate
+  '#3b82f6', // 0 Freight Rate increase – blue
+  '#ef4444', // 1 Consumer CPI impact – red
+  '#f97316', // 2 Food & grocery – orange
+  '#64748b', // 3 Absorbed by carriers – slate
+  '#475569', // 4 Other goods – dark slate
 ];
 
 function computeSankeyData(downstream: DownstreamData | undefined) {
   if (!downstream) return null;
 
-  const dieselIncrease = Math.max(downstream.diesel.increase, 0.01);
-  const total = 1000;
+  /**
+   * Sankey modeling of freight cost pass-through.
+   * 
+   * Scale: Use 100 units as the base for "freight rate increase"
+   *   - 15 units pass through to consumers as CPI (elasticity ≈ 0.15)
+   *   - 85 units absorbed by carriers/retailers (logistics margin compression)
+   * 
+   * Consumer CPI is then broken down into food vs non-food components.
+   */
+  const TOTAL_FREIGHT = 100; // Base units for freight rate increase
 
-  // Freight rate increase % → scale to units out of 1000
-  const freightValue       = Math.min(Math.round(downstream.freight.rateIncreasePercent * 10), 950);
-  const carrierAbsorption  = Math.max(total - freightValue, 50);
+  // Calculate pass-through ratio from actual elasticity
+  // Min 0.05 to avoid edge cases; max 0.25 to cap visualization
+  const passThruRatio = downstream.freight.rateIncreasePercent > 0
+    ? Math.max(0.05, Math.min(0.25, downstream.consumer.avgCPIIncrease / downstream.freight.rateIncreasePercent))
+    : 0.15;
 
-  // Consumer impact: food is a *subset* of total CPI, not additive.
-  const totalCpiValue = Math.max(Math.round(downstream.consumer.avgCPIIncrease * 100), 2);
-  const foodValue     = Math.max(Math.round(downstream.consumer.foodPriceIncrease * 100), 1);
-  // Non-food is the remainder of total CPI after the food component
-  const nonFoodValue  = Math.max(totalCpiValue - Math.min(foodValue, totalCpiValue - 1), 1);
-  const retailerAbsorption = Math.max(freightValue - totalCpiValue, 1);
+  // Freight cost split: what flows to consumers vs. absorbed
+  const cpiPassThru = Math.round(TOTAL_FREIGHT * passThruRatio);
+  const carrierAbsorption = TOTAL_FREIGHT - cpiPassThru;
+
+  // CPI breakdown into food and non-food components
+  // These are proportional to the relative price increases
+  const foodValue = Math.max(Math.round(downstream.consumer.foodPriceIncrease * 5), 1);
+  const nonFoodValue = Math.max(Math.round((downstream.consumer.avgCPIIncrease - downstream.consumer.foodPriceIncrease) * 5), 1);
 
   return {
     nodes: [
-      { name: `Diesel ↑$${dieselIncrease.toFixed(2)}/gal` },
-      { name: 'Trucking Costs' },
-      { name: 'Freight Surcharges' },
-      { name: `Consumer CPI +${downstream.consumer.avgCPIIncrease.toFixed(2)}%` },
-      { name: `Food & Grocery +${downstream.consumer.foodPriceIncrease.toFixed(2)}%` },
-      { name: 'Absorbed – Carriers' },
-      { name: `Non-Food Goods` },
+      { name: `Freight Rate ↑ ${downstream.freight.rateIncreasePercent.toFixed(1)}%` },
+      { name: `Consumer CPI ↑ ${downstream.consumer.avgCPIIncrease.toFixed(2)}%` },
+      { name: `Food ↑ ${downstream.consumer.foodPriceIncrease.toFixed(2)}%` },
+      { name: 'Absorbed by\nCarriers/Retailers' },
+      { name: `Other Goods ↑ ${(downstream.consumer.avgCPIIncrease - downstream.consumer.foodPriceIncrease).toFixed(2)}%` },
     ],
     links: [
-      { source: 0, target: 1, value: total },
-      { source: 1, target: 2, value: freightValue },
-      { source: 1, target: 5, value: carrierAbsorption },
-      { source: 2, target: 3, value: totalCpiValue },                          // Freight → Total CPI
-      { source: 2, target: 5, value: Math.max(retailerAbsorption, 1) },        // Freight → Absorbed
-      { source: 3, target: 4, value: Math.min(foodValue, totalCpiValue - 1) }, // CPI → Food subset
-      { source: 3, target: 6, value: nonFoodValue },                           // CPI → Non-food subset
+      { source: 0, target: 1, value: cpiPassThru },          // Freight → CPI pass-through
+      { source: 0, target: 3, value: carrierAbsorption },    // Freight → Absorbed
+      { source: 1, target: 2, value: foodValue },            // CPI → Food
+      { source: 1, target: 4, value: nonFoodValue },         // CPI → Non-food
     ],
   };
 }
@@ -332,12 +337,11 @@ export default function Downstream() {
             {/* Legend */}
             <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-400">
               {[
-                { color: '#3b82f6', label: 'Diesel – source of cost increase' },
-                { color: '#f59e0b', label: 'Trucking operations absorb diesel cost' },
-                { color: '#eab308', label: 'Freight surcharges passed to shippers' },
-                { color: '#ef4444', label: 'Consumer goods CPI impact' },
-                { color: '#f97316', label: 'Food & grocery inflation' },
-                { color: '#64748b', label: 'Cost absorbed (not passed through)' },
+                { color: '#3b82f6', label: 'Freight rate increase (100%)' },
+                { color: '#ef4444', label: 'Consumer CPI pass-through (~15%)' },
+                { color: '#f97316', label: 'Food & grocery inflation (9% transport share)' },
+                { color: '#64748b', label: 'Absorbed by carriers/retailers (~85%)' },
+                { color: '#475569', label: 'Other goods & services' },
               ].map(({ color, label }) => (
                 <span key={label} className="flex items-center gap-1.5">
                   <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: color }} />

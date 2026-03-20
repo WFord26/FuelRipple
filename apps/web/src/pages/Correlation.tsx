@@ -3,11 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { usePageSEO } from '../hooks/usePageSEO';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
-  Cell, ResponsiveContainer, ComposedChart, Line, Legend,
+  Cell, ResponsiveContainer, ComposedChart, Line, Legend, LineChart,
 } from 'recharts';
 import {
   getCrudeGasCorrelation, getRocketsAndFeathers,
-  getCorrelationPriceSeries, getEvents,
+  getCorrelationPriceSeries, getEvents, getDailyCrudePrices,
 } from '../api/client';
 
 // ── Event category config ─────────────────────────────────────────────────────
@@ -435,6 +435,15 @@ export default function Correlation() {
     staleTime: 24 * 60 * 60 * 1000,
   });
 
+  const {
+    data: dailyCrudeWti = [],
+    isLoading: crudeLoading,
+  } = useQuery({
+    queryKey: ['dailyCrudeWti'],
+    queryFn: () => getDailyCrudePrices('crude_wti', 365),
+    staleTime: 6 * 60 * 60 * 1000, // 6 hours — trading hours update
+  });
+
   // Derived
   const crossCorr: LagPoint[]  = corrData?.crossCorrelation ?? [];
   const optimalLag: number     = corrData?.optimalLag ?? 0;
@@ -574,6 +583,58 @@ export default function Correlation() {
               <div className="text-slate-400">No price series data yet</div>
               <div className="text-slate-500 text-xs max-w-xs">
                 Run the data ingestion job to populate crude oil and gasoline price history.
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── Daily Crude Oil Prices section (Yahoo Finance) ── */}
+      <section className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-700">
+          <h3 className="text-lg font-semibold text-white">📉 Daily WTI Crude Oil — Last Year</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Real-time (15-min delayed) prices from Yahoo Finance — NYMEX front-month contracts
+          </p>
+        </div>
+        <div className="p-6">
+          {crudeLoading && <SkeletonBlock h="h-80" />}
+          {!crudeLoading && dailyCrudeWti.length > 0 && (
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={dailyCrudeWti} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: '#94a3b8', fontSize: 12 }}
+                  tickFormatter={(v: string) => {
+                    const d = new Date(v);
+                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  }}
+                  interval={Math.floor((dailyCrudeWti.length / 10))}
+                />
+                <YAxis
+                  tick={{ fill: '#94a3b8', fontSize: 12 }}
+                  label={{ value: '$/barrel', angle: -90, position: 'insideLeft', offset: 10, fill: '#64748b', fontSize: 12 }}
+                />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
+                  labelFormatter={(label: string) => new Date(label).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                  formatter={(value: any, name: string) => {
+                    const names: Record<string, string> = { high: 'High', low: 'Low', open: 'Open', close: 'Close', avg: 'Avg' };
+                    return [value ? `$${Number(value).toFixed(2)}/bbl` : '—', names[name] || name];
+                  }}
+                />
+                <Legend wrapperStyle={{ paddingTop: '12px' }} />
+                <Line type="monotone" dataKey="close" stroke="#fbbf24" strokeWidth={2} dot={false} name="Close" />
+                <Line type="monotone" dataKey="avg" stroke="#93c5fd" strokeWidth={1} dot={false} strokeDasharray="4 4" name="Daily Avg" />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+          {!crudeLoading && dailyCrudeWti.length === 0 && (
+            <div className="h-80 flex items-center justify-center flex-col gap-2 text-center">
+              <div className="text-slate-400">No daily crude data available</div>
+              <div className="text-slate-500 text-xs max-w-xs">
+                The job queue needs to run to fetch Yahoo Finance WTI prices.
               </div>
             </div>
           )}

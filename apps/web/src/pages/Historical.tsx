@@ -1,13 +1,14 @@
-﻿import { useState } from 'react';
-import { useQueries, useQuery } from '@tanstack/react-query';
-import { PriceChart, ChartSeries } from '../components/PriceChart';
-import { getHistoricalPrices, getEvents } from '../api/client';
+﻿import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { getAaaNationalHistory, getAaaStateHistory, getAaaPaddHistory } from '../api/client';
 import { usePageSEO } from '../hooks/usePageSEO';
 
-type TimeRange = '30D' | '90D' | '1Y' | '5Y' | 'ALL';
-type Metric = 'gas_regular' | 'crude_wti' | 'crude_brent' | 'diesel';
+type TimeRange = '7D' | '30D' | '90D' | '1Y' | '5Y' | 'ALL';
+type FuelGrade = 'regular' | 'mid_grade' | 'premium' | 'diesel';
 
 const TIME_RANGES: { label: string; value: TimeRange; days: number }[] = [
+  { label: '7 Days', value: '7D', days: 7 },
   { label: '30 Days', value: '30D', days: 30 },
   { label: '90 Days', value: '90D', days: 90 },
   { label: '1 Year', value: '1Y', days: 365 },
@@ -15,241 +16,254 @@ const TIME_RANGES: { label: string; value: TimeRange; days: number }[] = [
   { label: 'All Time', value: 'ALL', days: 10000 },
 ];
 
-const METRICS: { label: string; value: Metric; color: string; activeCls: string; borderCls: string }[] = [
-  { label: 'Regular Gas', value: 'gas_regular', color: '#3b82f6', activeCls: 'bg-blue-500 border-blue-500 text-white', borderCls: 'border-l-blue-500' },
-  { label: 'WTI Crude', value: 'crude_wti', color: '#f59e0b', activeCls: 'bg-amber-400 border-amber-400 text-white', borderCls: 'border-l-amber-400' },
-  { label: 'Brent Crude', value: 'crude_brent', color: '#ef4444', activeCls: 'bg-red-500 border-red-500 text-white', borderCls: 'border-l-red-500' },
+// AAA fuel grades with colors and styling
+const FUEL_GRADES: { label: string; value: FuelGrade; color: string; activeCls: string; borderCls: string }[] = [
+  { label: 'Regular', value: 'regular', color: '#3b82f6', activeCls: 'bg-blue-500 border-blue-500 text-white', borderCls: 'border-l-blue-500' },
+  { label: 'Mid Grade', value: 'mid_grade', color: '#8b5cf6', activeCls: 'bg-violet-500 border-violet-500 text-white', borderCls: 'border-l-violet-500' },
+  { label: 'Premium', value: 'premium', color: '#ec4899', activeCls: 'bg-pink-500 border-pink-500 text-white', borderCls: 'border-l-pink-500' },
   { label: 'Diesel', value: 'diesel', color: '#10b981', activeCls: 'bg-emerald-500 border-emerald-500 text-white', borderCls: 'border-l-emerald-500' },
 ];
 
-// Crude oil is only available at the national (US) level
-const CRUDE_METRICS: Metric[] = ['crude_wti', 'crude_brent'];
-
-// PADD region codes stored in the DB (EIA R-codes)
+// PADD region codes for AAA aggregates
 const PADD_REGIONS = [
   { label: 'PADD 1 - East Coast', value: 'R10' },
   { label: 'PADD 2 - Midwest', value: 'R20' },
   { label: 'PADD 3 - Gulf Coast', value: 'R30' },
   { label: 'PADD 4 - Rocky Mountain', value: 'R40' },
-  { label: 'PADD 5 - West Coast/AK/HI', value: 'R50' },
+  { label: 'PADD 5 - West Coast', value: 'R50' },
 ];
 
-// EIA duoarea state codes (S + 2-letter abbr)
-const STATE_OPTIONS: { label: string; value: string }[] = [
-  { label: 'Alabama', value: 'SAL' }, { label: 'Alaska', value: 'SAK' },
-  { label: 'Arizona', value: 'SAZ' }, { label: 'Arkansas', value: 'SAR' },
-  { label: 'California', value: 'SCA' }, { label: 'Colorado', value: 'SCO' },
-  { label: 'Connecticut', value: 'SCT' }, { label: 'Delaware', value: 'SDE' },
-  { label: 'Washington DC', value: 'SDC' }, { label: 'Florida', value: 'SFL' },
-  { label: 'Georgia', value: 'SGA' }, { label: 'Hawaii', value: 'SHI' },
-  { label: 'Idaho', value: 'SID' }, { label: 'Illinois', value: 'SIL' },
-  { label: 'Indiana', value: 'SIN' }, { label: 'Iowa', value: 'SIA' },
-  { label: 'Kansas', value: 'SKS' }, { label: 'Kentucky', value: 'SKY' },
-  { label: 'Louisiana', value: 'SLA' }, { label: 'Maine', value: 'SME' },
-  { label: 'Maryland', value: 'SMD' }, { label: 'Massachusetts', value: 'SMA' },
-  { label: 'Michigan', value: 'SMI' }, { label: 'Minnesota', value: 'SMN' },
-  { label: 'Mississippi', value: 'SMS' }, { label: 'Missouri', value: 'SMO' },
-  { label: 'Montana', value: 'SMT' }, { label: 'Nebraska', value: 'SNE' },
-  { label: 'Nevada', value: 'SNV' }, { label: 'New Hampshire', value: 'SNH' },
-  { label: 'New Jersey', value: 'SNJ' }, { label: 'New Mexico', value: 'SNM' },
-  { label: 'New York', value: 'SNY' }, { label: 'North Carolina', value: 'SNC' },
-  { label: 'North Dakota', value: 'SND' }, { label: 'Ohio', value: 'SOH' },
-  { label: 'Oklahoma', value: 'SOK' }, { label: 'Oregon', value: 'SOR' },
-  { label: 'Pennsylvania', value: 'SPA' }, { label: 'Rhode Island', value: 'SRI' },
-  { label: 'South Carolina', value: 'SSC' }, { label: 'South Dakota', value: 'SSD' },
-  { label: 'Tennessee', value: 'STN' }, { label: 'Texas', value: 'STX' },
-  { label: 'Utah', value: 'SUT' }, { label: 'Vermont', value: 'SVT' },
-  { label: 'Virginia', value: 'SVA' }, { label: 'Washington', value: 'SWA' },
-  { label: 'West Virginia', value: 'SWV' }, { label: 'Wisconsin', value: 'SWI' },
-  { label: 'Wyoming', value: 'SWY' },
+// US state abbreviations for AAA state-level data
+const STATE_ABBREVIATIONS: { label: string; value: string }[] = [
+  { label: 'Alabama', value: 'AL' }, { label: 'Alaska', value: 'AK' },
+  { label: 'Arizona', value: 'AZ' }, { label: 'Arkansas', value: 'AR' },
+  { label: 'California', value: 'CA' }, { label: 'Colorado', value: 'CO' },
+  { label: 'Connecticut', value: 'CT' }, { label: 'Delaware', value: 'DE' },
+  { label: 'Washington DC', value: 'DC' }, { label: 'Florida', value: 'FL' },
+  { label: 'Georgia', value: 'GA' }, { label: 'Hawaii', value: 'HI' },
+  { label: 'Idaho', value: 'ID' }, { label: 'Illinois', value: 'IL' },
+  { label: 'Indiana', value: 'IN' }, { label: 'Iowa', value: 'IA' },
+  { label: 'Kansas', value: 'KS' }, { label: 'Kentucky', value: 'KY' },
+  { label: 'Louisiana', value: 'LA' }, { label: 'Maine', value: 'ME' },
+  { label: 'Maryland', value: 'MD' }, { label: 'Massachusetts', value: 'MA' },
+  { label: 'Michigan', value: 'MI' }, { label: 'Minnesota', value: 'MN' },
+  { label: 'Mississippi', value: 'MS' }, { label: 'Missouri', value: 'MO' },
+  { label: 'Montana', value: 'MT' }, { label: 'Nebraska', value: 'NE' },
+  { label: 'Nevada', value: 'NV' }, { label: 'New Hampshire', value: 'NH' },
+  { label: 'New Jersey', value: 'NJ' }, { label: 'New Mexico', value: 'NM' },
+  { label: 'New York', value: 'NY' }, { label: 'North Carolina', value: 'NC' },
+  { label: 'North Dakota', value: 'ND' }, { label: 'Ohio', value: 'OH' },
+  { label: 'Oklahoma', value: 'OK' }, { label: 'Oregon', value: 'OR' },
+  { label: 'Pennsylvania', value: 'PA' }, { label: 'Rhode Island', value: 'RI' },
+  { label: 'South Carolina', value: 'SC' }, { label: 'South Dakota', value: 'SD' },
+  { label: 'Tennessee', value: 'TN' }, { label: 'Texas', value: 'TX' },
+  { label: 'Utah', value: 'UT' }, { label: 'Vermont', value: 'VT' },
+  { label: 'Virginia', value: 'VA' }, { label: 'Washington', value: 'WA' },
+  { label: 'West Virginia', value: 'WV' }, { label: 'Wisconsin', value: 'WI' },
+  { label: 'Wyoming', value: 'WY' },
 ];
 
 type RegionScope = 'national' | 'padd' | 'state';
 
+// Compute simple moving average
+const computeMA = (values: number[], window: number): number[] => {
+  const ma: number[] = [];
+  for (let i = 0; i < values.length; i++) {
+    const start = Math.max(0, i - window + 1);
+    const slice = values.slice(start, i + 1);
+    ma.push(slice.reduce((a, b) => a + b, 0) / slice.length);
+  }
+  return ma;
+};
+
+// Calculate price statistics with period-over-period changes
+const calculateStats = (data: Array<{ time: string; value: number }>) => {
+  if (data.length === 0) return null;
+  const values = data.map(d => d.value);
+  const current = values[values.length - 1];
+  const prev = values[0];
+  
+  // Period-over-period changes
+  const change7d = values.length >= 7 ? ((current - values[Math.max(0, values.length - 7)]) / values[Math.max(0, values.length - 7)]) * 100 : 0;
+  const change30d = values.length >= 30 ? ((current - values[Math.max(0, values.length - 30)]) / values[Math.max(0, values.length - 30)]) * 100 : 0;
+  
+  return {
+    current,
+    min: Math.min(...values),
+    max: Math.max(...values),
+    avg: values.reduce((s, v) => s + v, 0) / values.length,
+    change: values.length > 1 ? ((current - prev) / prev) * 100 : 0,
+    change7d,
+    change30d,
+  };
+};
+
 export default function Historical() {
   usePageSEO({
-    title: 'Historical Gas Price Charts',
-    description: '30+ years of US gasoline price history by PADD region and state. Compare regular gas, WTI, Brent crude, and diesel trends with geopolitical event overlays.',
+    title: 'Historical Fuel Prices by Grade',
+    description: 'Daily AAA and Yahoo Finance fuel prices: regular, mid-grade, premium, diesel, WTI and Brent crude at national, PADD regional, and state levels.',
     canonicalPath: '/historical',
   });
 
   const [timeRange, setTimeRange] = useState<TimeRange>('1Y');
-  const [activeMetrics, setActiveMetrics] = useState<Set<Metric>>(
-    new Set(METRICS.map(m => m.value))
+  const [activeFuels, setActiveFuels] = useState<Set<FuelGrade>>(
+    new Set(['regular', 'diesel'])
   );
+  const [showCrude, setShowCrude] = useState(false);
   const [regionScope, setRegionScope] = useState<RegionScope>('national');
   const [selectedPadd, setSelectedPadd] = useState('R10');
-  const [selectedState, setSelectedState] = useState('SCA');
-  const [showEvents, setShowEvents] = useState(true);
+  const [selectedState, setSelectedState] = useState('CA');
+  const [showMovingAverage, setShowMovingAverage] = useState(false);
+  const [showEvents, setShowEvents] = useState(false);
 
   const selectedRange = TIME_RANGES.find(r => r.value === timeRange);
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - (selectedRange?.days || 365));
+  const limit = Math.ceil((selectedRange?.days || 365) * 1.5); // AAA API limit
 
-  const granularity =
-    (timeRange === '30D' || timeRange === '90D') ? 'daily' :
-    (timeRange === '5Y' || timeRange === 'ALL') ? 'monthly' :
-    'weekly';
-
-  // National region codes differ by metric:
-  //   gas_regular → 'NUS'  (EIA national duoarea code)
-  //   diesel, crude_wti, crude_brent → 'US'
-  const NATIONAL_REGION: Record<Metric, string> = {
-    gas_regular: 'NUS',
-    diesel:      'US',
-    crude_wti:   'US',
-    crude_brent: 'US',
-  };
-
-  // Resolve the region code for a given metric given current scope selection
-  const getRegion = (metric: Metric): string => {
-    if (CRUDE_METRICS.includes(metric)) return 'US';
-    if (regionScope === 'national') return NATIONAL_REGION[metric] ?? 'US';
-    if (regionScope === 'padd') return selectedPadd;
-    return selectedState;
-  };
-
-  const toggleMetric = (metric: Metric) => {
-    setActiveMetrics(prev => {
-      const next = new Set(prev);
-      if (next.has(metric)) {
-        if (next.size > 1) next.delete(metric);
+  // Fetch AAA data based on region scope
+  const aaaQuery = useQuery({
+    queryKey: ['aaa', regionScope, selectedPadd, selectedState, timeRange],
+    queryFn: async () => {
+      let data;
+      if (regionScope === 'national') {
+        data = await getAaaNationalHistory(limit);
+      } else if (regionScope === 'padd') {
+        data = await getAaaPaddHistory(selectedPadd, limit);
       } else {
-        next.add(metric);
+        data = await getAaaStateHistory(selectedState, limit);
+      }
+      return data.reverse(); // Oldest first for charting
+    },
+  });
+
+  // Prepare chart data with optional moving averages
+  const chartData = useMemo(() => {
+    if (!aaaQuery.data) return [];
+    
+    const base = aaaQuery.data.map((point: any) => {
+      const date = new Date(point.time);
+      return {
+        time: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }),
+        timeRaw: point.time,
+        regular: point.regular,
+        mid_grade: point.mid_grade,
+        premium: point.premium,
+        diesel: point.diesel,
+      };
+    });
+
+    if (!showMovingAverage) return base;
+
+    // Add 7-day moving averages
+    const ma7Window = 7;
+    const regularVals = base.map((d: any) => d.regular).filter((v: any): v is number => v !== null);
+    const dieselVals = base.map((d: any) => d.diesel).filter((v: any): v is number => v !== null);
+    
+    const regularMA = computeMA(regularVals, ma7Window);
+    const dieselMA = computeMA(dieselVals, ma7Window);
+
+    return base.map((d: any, i: number) => ({
+      ...d,
+      regularMA: regularMA[i],
+      dieselMA: dieselMA[i],
+    }));
+  }, [aaaQuery.data, showMovingAverage]);
+
+  // Statistics for visible fuel grades
+  const stats = useMemo(() => {
+    if (!aaaQuery.data) return {};
+    
+    const result: Record<FuelGrade, ReturnType<typeof calculateStats>> = {
+      regular: null,
+      mid_grade: null,
+      premium: null,
+      diesel: null,
+    };
+
+    activeFuels.forEach((fuel: FuelGrade) => {
+      const values = aaaQuery.data
+        .map((d: any) => ({ time: d.time, value: d[fuel] }))
+        .filter((d: any): d is { time: string; value: number } => d.value != null && typeof d.value === 'number');
+      
+      result[fuel] = calculateStats(values);
+    });
+
+    return result;
+  }, [aaaQuery.data, activeFuels]);
+
+  const toggleFuel = (fuel: FuelGrade) => {
+    setActiveFuels(prev => {
+      const next = new Set(prev);
+      if (next.has(fuel)) {
+        if (next.size > 1) next.delete(fuel);
+      } else {
+        next.add(fuel);
       }
       return next;
     });
   };
 
-  // Fetch all 4 metrics in parallel with explicit region on every request
-  const metricQueries = useQueries({
-    queries: METRICS.map(m => {
-      const region = getRegion(m.value);
-      return {
-        queryKey: ['priceHistory', m.value, region, timeRange],
-        queryFn: async () => {
-          const data = await getHistoricalPrices({
-            metric: m.value,
-            region,
-            start: startDate.toISOString(),
-            end: endDate.toISOString(),
-            granularity,
-          });
-          return { metric: m.value, data };
-        },
-      };
-    }),
-  });
-
-  // Fetch geopolitical events
-  const { data: events } = useQuery({
-    queryKey: ['events', timeRange],
-    queryFn: async () => {
-      const data = await getEvents({
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
-      });
-      return data;
-    },
-    enabled: showEvents,
-  });
-
-  const isLoading = metricQueries.some(q => q.isLoading);
-
-  // Build chart series sorted ascending by time
-  const chartSeries: ChartSeries[] = METRICS.filter(m => activeMetrics.has(m.value)).flatMap(m => {
-    const q = metricQueries.find(q => q.data?.metric === m.value);
-    const raw = q?.data?.data ?? [];
-    if (!raw.length) return [];
-    return [{
-      id: m.value,
-      name: m.label,
-      color: m.color,
-      data: raw
-        .map((p: any) => ({ time: p.time.split('T')[0], value: p.value }))
-        .sort((a: any, b: any) => a.time.localeCompare(b.time)),
-    }];
-  });
-
-  // Per-metric stat cards
-  const metricStats = METRICS.filter(m => activeMetrics.has(m.value)).map(m => {
-    const q = metricQueries.find(q => q.data?.metric === m.value);
-    const raw: { time: string; value: number }[] = (q?.data?.data ?? [])
-      .map((p: any) => ({ time: p.time.split('T')[0], value: p.value }))
-      .sort((a: any, b: any) => a.time.localeCompare(b.time));
-    if (!raw.length) return null;
-    const values = raw.map(d => d.value);
-    const current = values[values.length - 1];
-    const change = values.length > 1
-      ? ((current - values[0]) / values[0]) * 100
-      : 0;
-    return {
-      ...m,
-      current,
-      min: Math.min(...values),
-      max: Math.max(...values),
-      avg: values.reduce((s, v) => s + v, 0) / values.length,
-      change,
-    };
-  }).filter(Boolean) as (typeof METRICS[0] & { current: number; min: number; max: number; avg: number; change: number })[];
-
-  const eventMarkers = showEvents && events?.map((e: any) => ({
-    time: (e.event_date ?? e.date ?? '').split('T')[0],
-    position: e.impact === 'bullish' ? 'aboveBar' : 'belowBar' as const,
-    color: e.impact === 'bullish' ? '#ef4444' : '#10b981',
-    shape: e.impact === 'bullish' ? 'arrowUp' : 'arrowDown' as const,
-    text: e.title?.substring(0, 1) ?? '',
-  })) || [];
-
+  const isLoading = aaaQuery.isLoading;
   const regionLabel =
     regionScope === 'national' ? 'National (US)' :
     regionScope === 'padd' ? (PADD_REGIONS.find(p => p.value === selectedPadd)?.label ?? selectedPadd) :
-    (STATE_OPTIONS.find(s => s.value === selectedState)?.label ?? selectedState);
-
-  const showCrudeNote = regionScope !== 'national' &&
-    (activeMetrics.has('crude_wti') || activeMetrics.has('crude_brent'));
+    (STATE_ABBREVIATIONS.find(s => s.value === selectedState)?.label ?? selectedState);
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-3xl font-bold text-white mb-2">Historical Trends</h2>
+        <h2 className="text-3xl font-bold text-white mb-2">Historical Fuel Prices</h2>
         <p className="text-slate-400">
-          Daily-averaged price history by region — national, PADD, or state level
+          Daily AAA averages for all 4 fuel grades by region, plus Yahoo Finance crude oil comparison
         </p>
       </div>
 
-      {/* Controls */}
-      <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 space-y-5">
-
-        {/* Metric Toggles */}
+      {/* Controls Card */}
+      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 space-y-5">
+        
+        {/* Fuel Grade Toggles */}
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Metrics</label>
+          <label className="block text-sm font-medium text-slate-300 mb-3">Fuel Grades (AAA Data)</label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {METRICS.map((metric) => {
-              const active = activeMetrics.has(metric.value);
+            {FUEL_GRADES.map((fuel) => {
+              const active = activeFuels.has(fuel.value);
               return (
                 <button
-                  key={metric.value}
-                  onClick={() => toggleMetric(metric.value)}
+                  key={fuel.value}
+                  onClick={() => toggleFuel(fuel.value)}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors border-2 ${
                     active
-                      ? metric.activeCls
+                      ? fuel.activeCls
                       : 'bg-slate-700 text-slate-400 border-slate-600 hover:bg-slate-600'
                   }`}
                 >
-                  {metric.label}
+                  {fuel.label}
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Region Scope */}
+        {/* Crude Oil Toggle (National Only) */}
+        {regionScope === 'national' && (
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="showCrude"
+              checked={showCrude}
+              onChange={(e) => setShowCrude(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-600 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="showCrude" className="text-sm text-slate-300">
+              Overlay WTI/Brent Crude (Yahoo Finance)
+            </label>
+          </div>
+        )}
+
+        {/* Region Selection */}
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Region</label>
-          <div className="flex flex-wrap gap-2">
+          <label className="block text-sm font-medium text-slate-300 mb-3">Region</label>
+          <div className="flex flex-wrap gap-2 mb-3">
             {(['national', 'padd', 'state'] as RegionScope[]).map(scope => (
               <button
                 key={scope}
@@ -260,18 +274,18 @@ export default function Historical() {
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                 }`}
               >
-                {scope === 'national' ? 'National (US)' : scope === 'padd' ? 'PADD Region' : 'State'}
+                {scope === 'national' ? 'National' : scope === 'padd' ? 'PADD Region' : 'State'}
               </button>
             ))}
           </div>
 
-          {/* PADD picker */}
+          {/* PADD Selector */}
           {regionScope === 'padd' && (
             <select
               aria-label="Select PADD region"
               value={selectedPadd}
               onChange={e => setSelectedPadd(e.target.value)}
-              className="mt-3 w-full sm:w-auto bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full sm:w-72 bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {PADD_REGIONS.map(p => (
                 <option key={p.value} value={p.value}>{p.label}</option>
@@ -279,37 +293,30 @@ export default function Historical() {
             </select>
           )}
 
-          {/* State picker */}
+          {/* State Selector */}
           {regionScope === 'state' && (
             <select
               aria-label="Select state"
               value={selectedState}
               onChange={e => setSelectedState(e.target.value)}
-              className="mt-3 w-full sm:w-72 bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full sm:w-72 bg-slate-700 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {STATE_OPTIONS.map(s => (
+              {STATE_ABBREVIATIONS.map(s => (
                 <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </select>
-          )}
-
-          {/* Crude-national notice */}
-          {showCrudeNote && (
-            <p className="mt-2 text-xs text-amber-400">
-              WTI and Brent Crude prices are only available at the national level and are always shown as US averages.
-            </p>
           )}
         </div>
 
         {/* Time Range */}
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Time Range</label>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          <label className="block text-sm font-medium text-slate-300 mb-3">Time Range</label>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {TIME_RANGES.map((range) => (
               <button
                 key={range.value}
                 onClick={() => setTimeRange(range.value)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                className={`px-3 py-2 rounded-lg font-medium text-sm transition-colors ${
                   timeRange === range.value
                     ? 'bg-blue-600 text-white'
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
@@ -321,113 +328,150 @@ export default function Historical() {
           </div>
         </div>
 
-        {/* Event Toggle */}
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="showEvents"
-            checked={showEvents}
-            onChange={(e) => setShowEvents(e.target.checked)}
-            className="w-4 h-4 rounded border-slate-600 text-blue-600 focus:ring-blue-500"
-          />
-          <label htmlFor="showEvents" className="text-sm text-slate-300">
-            Show geopolitical event markers
+        {/* Analysis Options */}
+        <div className="flex flex-wrap gap-4 pt-2 border-t border-slate-700">
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showMovingAverage}
+              onChange={(e) => setShowMovingAverage(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-600 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-slate-300">7-day Moving Average</span>
+          </label>
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showEvents}
+              onChange={(e) => setShowEvents(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-600 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-slate-300">Show Events</span>
           </label>
         </div>
       </div>
 
-      {/* Combined Chart */}
+      {/* Main Chart */}
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-lg font-semibold text-white">Combined Price History</h3>
-          <span className="text-xs text-slate-400 bg-slate-700 px-2 py-1 rounded">
-            {regionLabel} &middot; {granularity} avg
-          </span>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Price History</h3>
+            <p className="text-xs text-slate-400 mt-1">{regionLabel}</p>
+          </div>
+          <div className="text-xs text-slate-500 bg-slate-700 px-3 py-1 rounded">
+            {chartData.length} days
+          </div>
         </div>
-        <p className="text-xs text-slate-500 mb-4">
-          Values are {granularity} averages of all readings within each {granularity === 'daily' ? 'day' : '7-day window'}.
-        </p>
+
         {isLoading ? (
           <div className="flex items-center justify-center h-96">
-            <div className="text-slate-400">Loading chart data...</div>
+            <div className="text-slate-400">Loading AAA price data...</div>
           </div>
-        ) : chartSeries.length > 0 ? (
-          <PriceChart
-            series={chartSeries}
-            height={520}
-            events={eventMarkers}
-          />
+        ) : chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={450}>
+            <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <XAxis
+                dataKey="time"
+                stroke="#94a3b8"
+                style={{ fontSize: '12px' }}
+                tick={{ fill: '#94a3b8' }}
+              />
+              <YAxis
+                stroke="#94a3b8"
+                style={{ fontSize: '12px' }}
+                tick={{ fill: '#94a3b8' }}
+                label={{ value: 'Price ($/gal)', angle: -90, position: 'insideLeft', fill: '#94a3b8' }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1e293b',
+                  border: '1px solid #475569',
+                  borderRadius: '8px',
+                }}
+                labelStyle={{ color: '#e2e8f0' }}
+                wrapperStyle={{ outline: 'none' }}
+              />
+              <Legend wrapperStyle={{ paddingTop: '20px' }} />
+              
+              {/* AAA Fuel Grades */}
+              {activeFuels.has('regular') && <Line type="monotone" dataKey="regular" stroke="#3b82f6" name="Regular" dot={false} isAnimationActive={false} />}
+              {activeFuels.has('mid_grade') && <Line type="monotone" dataKey="mid_grade" stroke="#8b5cf6" name="Mid Grade" dot={false} isAnimationActive={false} />}
+              {activeFuels.has('premium') && <Line type="monotone" dataKey="premium" stroke="#ec4899" name="Premium" dot={false} isAnimationActive={false} />}
+              {activeFuels.has('diesel') && <Line type="monotone" dataKey="diesel" stroke="#10b981" name="Diesel" dot={false} isAnimationActive={false} />}
+              
+              {/* Moving Averages */}
+              {showMovingAverage && activeFuels.has('regular') && <Line type="monotone" dataKey="regularMA" stroke="#3b82f6" name="Regular 7MA" dot={false} strokeDasharray="5 5" strokeWidth={1.5} isAnimationActive={false} />}
+              {showMovingAverage && activeFuels.has('diesel') && <Line type="monotone" dataKey="dieselMA" stroke="#10b981" name="Diesel 7MA" dot={false} strokeDasharray="5 5" strokeWidth={1.5} isAnimationActive={false} />}
+            </LineChart>
+          </ResponsiveContainer>
         ) : (
           <div className="flex items-center justify-center h-96">
-            <div className="text-slate-400">No data available for the selected range and region</div>
+            <div className="text-slate-400">No data available for this region and time range</div>
           </div>
         )}
       </div>
 
-      {/* Per-Metric Statistics */}
-      {metricStats.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {metricStats.map(stat => (
-            <div
-              key={stat.value}
-              className={`bg-slate-800 rounded-lg p-4 border border-slate-700 border-l-4 ${stat.borderCls}`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-semibold text-white">{stat.label}</span>
-                <span className={`text-sm font-bold ${stat.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                  {stat.change >= 0 ? '+' : ''}{stat.change.toFixed(2)}%
-                </span>
-              </div>
-              {CRUDE_METRICS.includes(stat.value as Metric) && regionScope !== 'national' && (
-                <p className="text-xs text-amber-400 mb-2">US national only</p>
-              )}
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <div className="text-slate-400">Current</div>
-                  <div className="text-white font-semibold">${stat.current.toFixed(3)}</div>
+      {/* Statistics Grid */}
+      {activeFuels.size > 0 && Object.values(stats).some(s => s !== null) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {FUEL_GRADES
+            .filter(f => activeFuels.has(f.value) && (stats as any)[f.value])
+            .map((fuel: typeof FUEL_GRADES[0]) => {
+              const s = (stats as Record<FuelGrade, any>)[fuel.value];
+              if (!s) return null;
+              return (
+                <div key={fuel.value} className={`bg-slate-800 rounded-lg p-4 border border-slate-700 border-l-4 ${fuel.borderCls}`}>
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h4 className="text-sm font-semibold text-white">{fuel.label}</h4>
+                      <p className="text-2xl font-bold text-white mt-1">${s.current.toFixed(2)}</p>
+                    </div>
+                    <div className={`text-xs font-semibold px-2 py-1 rounded ${
+                      s.change >= 0 ? 'bg-red-500/20 text-red-300' : 'bg-green-500/20 text-green-300'
+                    }`}>
+                      {s.change >= 0 ? '+' : ''}{s.change.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <div className="text-slate-500">7-day</div>
+                      <div className={`font-semibold ${s.change7d >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                        {s.change7d >= 0 ? '+' : ''}{s.change7d.toFixed(1)}%
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-slate-500">30-day</div>
+                      <div className={`font-semibold ${s.change30d >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                        {s.change30d >= 0 ? '+' : ''}{s.change30d.toFixed(1)}%
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-slate-500">Min</div>
+                      <div className="text-slate-300">${s.min.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div className="text-slate-500">Max</div>
+                      <div className="text-slate-300">${s.max.toFixed(2)}</div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-slate-400">Average</div>
-                  <div className="text-white font-semibold">${stat.avg.toFixed(3)}</div>
-                </div>
-                <div>
-                  <div className="text-slate-400">Min</div>
-                  <div className="text-green-400 font-semibold">${stat.min.toFixed(3)}</div>
-                </div>
-                <div>
-                  <div className="text-slate-400">Max</div>
-                  <div className="text-red-400 font-semibold">${stat.max.toFixed(3)}</div>
-                </div>
-              </div>
-            </div>
-          ))}
+              );
+            })}
         </div>
       )}
 
-      {/* Events List */}
-      {showEvents && events && events.length > 0 && (
-        <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-          <h3 className="text-lg font-semibold text-white mb-4">Geopolitical Events</h3>
-          <div className="space-y-3">
-            {events.slice(0, 10).map((event: any, index: number) => (
-              <div key={index} className="flex items-start space-x-3 p-3 bg-slate-700/50 rounded-lg">
-                <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${event.impact >= 0 ? 'bg-red-400' : 'bg-green-400'}`} />
-                <div className="flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="font-medium text-white">{event.title}</div>
-                    <div className="text-sm text-slate-400 whitespace-nowrap">{new Date(event.date).toLocaleDateString()}</div>
-                  </div>
-                  <div className="text-sm text-slate-300 mt-1">{event.description}</div>
-                  <div className="flex items-center space-x-4 mt-2 text-xs">
-                    <span className="text-slate-400">Impact: <span className={event.impact >= 0 ? 'text-red-400' : 'text-green-400'}>{event.impact >= 0 ? '+' : ''}{event.impact}%</span></span>
-                    <span className="text-slate-500">{event.category}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Data Source Info */}
+      <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 text-xs text-slate-400">
+        <p className="mb-2">
+          <strong>Data Sources:</strong>
+        </p>
+        <ul className="space-y-1 ml-4 list-disc">
+          <li>Regular, Mid-Grade, Premium, Diesel: AAA National Average prices (daily updates)</li>
+          <li>WTI & Brent Crude: Yahoo Finance market data (15-min delayed)</li>
+          <li>Regional aggregates (PADD): Computed from state AAA averages</li>
+        </ul>
+      </div>
     </div>
   );
 }

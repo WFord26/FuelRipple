@@ -22,3 +22,4 @@ export * from './queries/prices';
 export * from './queries/events';
 export * from './queries/indicators';
 export * from './queries/supply';
+export * from './queries/aaa';

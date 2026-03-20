@@ -130,6 +130,10 @@ describe('CACHE_TTL', () => {
     expect(CACHE_TTL.DAILY_CRUDE).toBe(21600);
   });
 
+  it('AAA national TTL is 24 hours', () => {
+    expect(CACHE_TTL.AAA_NATIONAL).toBe(86400);
+  });
+
   it('historical TTL is 7 days', () => {
     expect(CACHE_TTL.HISTORICAL).toBe(604800);
   });

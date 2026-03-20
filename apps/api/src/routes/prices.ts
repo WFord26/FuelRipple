@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { PriceHistoryQuerySchema } from '@fuelripple/shared';
-import { getHistoricalPrices, getCurrentPrices, getPriceStats, getPriceChanges, getSeasonalComparison, getAllStatePrices, getDataStatus } from '@fuelripple/db';
+import { getHistoricalPrices, getCurrentPrices, getPriceStats, getPriceChanges, getSeasonalComparison, getAllStatePrices, getDataStatus, getLatestPricesSnapshot } from '@fuelripple/db';
 import { cacheOrFetch } from '../services/cache';
 import { CACHE_TTL } from '@fuelripple/shared';
 import { AppError } from '../middleware/errorHandler';
@@ -10,15 +10,23 @@ const router = Router();
 
 /**
  * GET /api/v1/prices/current
- * Get current prices for all regions
+ * Get current prices for all regions.
+ * Uses latest_prices snapshot table for O(1) lookup; falls back to
+ * hypertable DISTINCT ON scan if the snapshot is empty (pre-backfill).
  */
 router.get('/current', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const metric = (req.query.metric as string) || 'gas_regular';
-    
+
     const prices = await cacheOrFetch(
       `prices:current:${metric}`,
-      () => getCurrentPrices(metric),
+      async () => {
+        // Try fast snapshot table first
+        const snapshot = await getLatestPricesSnapshot(metric);
+        if (snapshot.length > 0) return snapshot;
+        // Fallback: hypertable scan (pre-backfill or first run)
+        return getCurrentPrices(metric);
+      },
       CACHE_TTL.WEEKLY_GAS
     );
 

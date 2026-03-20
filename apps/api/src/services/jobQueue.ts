@@ -4,9 +4,9 @@ import { fetchAllGasPrices, fetchDieselPrices, fetchRefineryUtilization, fetchRe
 import { fetchCrudeQuotes } from './marketClient';
 import { fetchEconomicIndicators } from './fredClient';
 import { fetchAllStatePrices } from './aaaClient';
-import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData, refreshMaterializedViews } from '@fuelripple/db';
-import type { RefineryOperationsRow, CapacityRow } from '@fuelripple/db';
-import { EnergyPrice, EconomicIndicator } from '@fuelripple/shared';
+import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData, refreshMaterializedViews, upsertNationalAverages, upsertLatestPrices, upsertStateAggregates, upsertPriceChangesCache, upsertPaddAggregates } from '@fuelripple/db';
+import type { RefineryOperationsRow, CapacityRow, AaaNationalAverageRow, AaaStateAggregateRow, AaaPaddAggregateRow, PriceChangesRow } from '@fuelripple/db';
+import { EnergyPrice, EconomicIndicator, PADD_REGIONS, STATE_POPULATIONS } from '@fuelripple/shared';
 import { abbrToDuoarea } from '../utils/regionMapper';
 
 export let dataQueue: Queue | null = null;
@@ -126,8 +126,8 @@ async function scheduleJobs(): Promise<void> {
     },
   });
 
-  // AAA state prices - daily at 9AM ET (published each morning)
-  await dataQueue.upsertJobScheduler('aaa-state-daily', {
+  // AAA state prices - 9AM ET (morning update - published each morning)
+  await dataQueue.upsertJobScheduler('aaa-state-morning', {
     pattern: '0 9 * * *',
   }, {
     name: 'fetch-aaa-prices',
@@ -140,6 +140,25 @@ async function scheduleJobs(): Promise<void> {
       },
     },
   });
+
+  // AAA state prices - 4PM ET (intraday update for real-time tracking)
+  // NOTE: Can be enabled/disabled via AAA_INTRADAY_ENABLED env var
+  if (process.env.AAA_INTRADAY_ENABLED === 'true') {
+    await dataQueue.upsertJobScheduler('aaa-state-intraday', {
+      pattern: '0 16 * * 1-5', // Weekdays only, 4PM ET
+    }, {
+      name: 'fetch-aaa-prices',
+      data: { type: 'aaa', priority: 'intraday' },
+      opts: {
+        attempts: 2,
+        backoff: {
+          type: 'exponential',
+          delay: 8000,
+        },
+      },
+    });
+    console.log('ℹ️  AAA intraday scraping enabled (4PM ET)');
+  }
 
   // EIA refinery/supply data - Monday 6PM ET (same WPSR release as gas prices)
   await dataQueue.upsertJobScheduler('eia-refinery-weekly', {
@@ -240,6 +259,77 @@ function createWorkers(): void {
 /**
  * Process gas prices from EIA
  */
+/**
+ * Build price_changes_cache rows for a given metric after new prices are
+ * inserted. Pulls the unique regions from the provided prices, then for each
+ * region queries the most recent price plus the price from 7/30/90/365 days ago
+ * and upserts the computed deltas.
+ */
+async function buildPriceChangesCache(metric: string, prices: EnergyPrice[]): Promise<void> {
+  try {
+    const { getKnex } = await import('@fuelripple/db');
+    const knex = getKnex();
+    const regions = [...new Set(prices.map(p => p.region))];
+    const rows: PriceChangesRow[] = [];
+
+    for (const region of regions) {
+      const result = await knex.raw<{ rows: any[] }>(`
+        WITH
+          latest AS (
+            SELECT value FROM energy_prices
+            WHERE metric = ? AND region = ?
+            ORDER BY time DESC LIMIT 1
+          ),
+          w7   AS (SELECT value FROM energy_prices WHERE metric = ? AND region = ?
+                    AND time >= NOW() - INTERVAL '8 days' AND time <= NOW() - INTERVAL '6 days'
+                    ORDER BY time DESC LIMIT 1),
+          w30  AS (SELECT value FROM energy_prices WHERE metric = ? AND region = ?
+                    AND time >= NOW() - INTERVAL '31 days' AND time <= NOW() - INTERVAL '29 days'
+                    ORDER BY time DESC LIMIT 1),
+          w90  AS (SELECT value FROM energy_prices WHERE metric = ? AND region = ?
+                    AND time >= NOW() - INTERVAL '91 days' AND time <= NOW() - INTERVAL '89 days'
+                    ORDER BY time DESC LIMIT 1),
+          w365 AS (SELECT value FROM energy_prices WHERE metric = ? AND region = ?
+                    AND time >= NOW() - INTERVAL '366 days' AND time <= NOW() - INTERVAL '364 days'
+                    ORDER BY time DESC LIMIT 1)
+        SELECT
+          (SELECT value FROM latest)  AS cur,
+          (SELECT value FROM w7)      AS p7,
+          (SELECT value FROM w30)     AS p30,
+          (SELECT value FROM w90)     AS p90,
+          (SELECT value FROM w365)    AS p365
+      `, [metric, region, metric, region, metric, region, metric, region, metric, region]);
+
+      const row = result.rows[0];
+      if (!row || row.cur == null) continue;
+
+      const pct = (cur: number, old: number | null) =>
+        old != null && old > 0 ? parseFloat(((cur - old) / old * 100).toFixed(4)) : null;
+
+      rows.push({
+        metric,
+        region,
+        current_price: row.cur,
+        week_ago_price: row.p7,
+        week_change_pct: pct(row.cur, row.p7),
+        month_ago_price: row.p30,
+        month_change_pct: pct(row.cur, row.p30),
+        three_month_ago_price: row.p90,
+        three_month_change_pct: pct(row.cur, row.p90),
+        year_ago_price: row.p365,
+        year_change_pct: pct(row.cur, row.p365),
+      });
+    }
+
+    if (rows.length > 0) {
+      await upsertPriceChangesCache(rows);
+      console.log(`  ✅ price_changes_cache updated for ${rows.length} ${metric} regions`);
+    }
+  } catch (err: any) {
+    console.warn(`  ⚠️  buildPriceChangesCache(${metric}) failed: ${err.message ?? err}`);
+  }
+}
+
 async function processGasPrices(): Promise<void> {
   console.log('Fetching gas prices from EIA...');
   
@@ -265,6 +355,8 @@ async function processGasPrices(): Promise<void> {
   console.log(`Prepared ${prices.length} price records for insertion`);
   await insertPrices(prices);
   console.log(`✅ Inserted ${prices.length} gas price records`);
+  await upsertLatestPrices(prices);
+  await buildPriceChangesCache('gas_regular', prices);
   await refreshMaterializedViews();
 }
 
@@ -307,8 +399,7 @@ async function processCrudePrices(): Promise<void> {
 
   if (prices.length > 0) {
     await insertPrices(prices);
-    console.log(`✅ Inserted ${prices.length} crude market price records (WTI: $${wti.price.toFixed(2)}, Brent: $${brent.price.toFixed(2)})`);
-  } else {
+    console.log(`✅ Inserted ${prices.length} crude market price records (WTI: $${wti.price.toFixed(2)}, Brent: $${brent.price.toFixed(2)})`);    await upsertLatestPrices(prices);  } else {
     console.warn('⚠️  No valid crude market prices received');
   }
 }
@@ -339,6 +430,8 @@ async function processDieselPrices(): Promise<void> {
   console.log(`Prepared ${prices.length} diesel price records for insertion`);
   await insertPrices(prices);
   console.log(`✅ Inserted ${prices.length} diesel price records`);
+  await upsertLatestPrices(prices);
+  await buildPriceChangesCache('diesel', prices);
   await refreshMaterializedViews();
 }
 
@@ -407,8 +500,16 @@ async function processAAAPrices(): Promise<void> {
 
   const stateData = await fetchAllStatePrices();
   const prices: EnergyPrice[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+  // Clear any stale same-day records before inserting (prevents duplicate-timestamp
+  // conflicts if the job runs more than once in a day or after a local-midnight record)
+  const { getKnex } = await import('@fuelripple/db');
+  const knex = getKnex();
+  await knex('aaa_state_aggregates')
+    .whereRaw(`time::date = ?::date`, [today.toISOString()])
+    .delete();
 
   for (const sp of stateData) {
     const duoarea = abbrToDuoarea(sp.state);
@@ -463,6 +564,103 @@ async function processAAAPrices(): Promise<void> {
   console.log(`Prepared ${prices.length} AAA price records for insertion`);
   await insertPrices(prices);
   console.log(`✅ Inserted ${prices.length} AAA price records`);
+  await upsertLatestPrices(prices);
+
+  // Compute and store the daily US nationwide average across all scraped states
+  const avg = (vals: number[]) =>
+    vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+
+  const regulars  = stateData.map(s => s.regular).filter((v): v is number => v !== null);
+  const midGrades = stateData.map(s => s.midGrade).filter((v): v is number => v !== null);
+  const premiums  = stateData.map(s => s.premium).filter((v): v is number => v !== null);
+  const diesels   = stateData.map(s => s.diesel).filter((v): v is number => v !== null);
+
+  const nationalAvg: AaaNationalAverageRow = {
+    time: today,
+    regular:   avg(regulars),
+    mid_grade: avg(midGrades),
+    premium:   avg(premiums),
+    diesel:    avg(diesels),
+    state_count: regulars.length,
+  };
+
+  await upsertNationalAverages([nationalAvg]);
+  console.log(
+    `✅ National average upserted for ${today.toISOString().split('T')[0]}: ` +
+    `regular=$${nationalAvg.regular?.toFixed(3) ?? 'N/A'} ` +
+    `mid=$${nationalAvg.mid_grade?.toFixed(3) ?? 'N/A'} ` +
+    `premium=$${nationalAvg.premium?.toFixed(3) ?? 'N/A'} ` +
+    `diesel=$${nationalAvg.diesel?.toFixed(3) ?? 'N/A'} ` +
+    `(${nationalAvg.state_count} states)`
+  );
+
+  // Store per-state aggregates for fast state-level queries
+  const stateAggs: AaaStateAggregateRow[] = stateData
+    .filter(s => s.regular !== null || s.midGrade !== null || s.premium !== null || s.diesel !== null)
+    .map(s => ({
+      time: today,
+      state: s.state,
+      regular: s.regular,
+      mid_grade: s.midGrade,
+      premium: s.premium,
+      diesel: s.diesel,
+    }));
+
+  await upsertStateAggregates(stateAggs);
+  console.log(`✅ Upserted ${stateAggs.length} state aggregates`);
+
+  // Compute PADD regional aggregates (simple mean + population-weighted mean)
+  const PADD_CODE_TO_REGION = {
+    R10: PADD_REGIONS.PADD1,
+    R20: PADD_REGIONS.PADD2,
+    R30: PADD_REGIONS.PADD3,
+    R40: PADD_REGIONS.PADD4,
+    R50: PADD_REGIONS.PADD5,
+  } as const;
+
+  const paddAggs: AaaPaddAggregateRow[] = [];
+  for (const [paddCode, region] of Object.entries(PADD_CODE_TO_REGION)) {
+    const statesInPadd = stateAggs.filter(s => (region.states as readonly string[]).includes(s.state));
+    const grades = ['regular', 'mid_grade', 'premium', 'diesel'] as const;
+    type GradeKey = typeof grades[number];
+
+    const agg: AaaPaddAggregateRow = {
+      time: today,
+      padd: paddCode,
+      regular_mean:   null,
+      mid_grade_mean: null,
+      premium_mean:   null,
+      diesel_mean:    null,
+      regular_wtd:    null,
+      mid_grade_wtd:  null,
+      premium_wtd:    null,
+      diesel_wtd:     null,
+      state_count: statesInPadd.length,
+    };
+
+    for (const grade of grades) {
+      const withPrices = statesInPadd.filter(s => s[grade as GradeKey] !== null);
+      if (withPrices.length === 0) continue;
+
+      const prices = withPrices.map(s => s[grade as GradeKey] as number);
+      (agg as any)[`${grade}_mean`] = prices.reduce((a, b) => a + b, 0) / prices.length;
+
+      let weightedSum = 0;
+      let totalWeight = 0;
+      for (const s of withPrices) {
+        const pop = STATE_POPULATIONS[s.state] ?? 0;
+        weightedSum += (s[grade as GradeKey] as number) * pop;
+        totalWeight += pop;
+      }
+      if (totalWeight > 0) (agg as any)[`${grade}_wtd`] = weightedSum / totalWeight;
+    }
+
+    paddAggs.push(agg);
+  }
+
+  await upsertPaddAggregates(paddAggs);
+  console.log(`✅ Upserted ${paddAggs.length} PADD aggregates`);
+
   await refreshMaterializedViews();
 }
 

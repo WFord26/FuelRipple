@@ -21,6 +21,8 @@ import eventsRouter from './routes/events';
 import adminRouter from './routes/admin';
 import supplyRouter from './routes/supply';
 import llmRouter from './routes/llm';
+import aaaRouter from './routes/aaa';
+import healthRouter from './routes/health';
 import { errorHandler } from './middleware/errorHandler';
 import { initializeCache } from './services/cache';
 import { initializeJobQueue } from './services/jobQueue';
@@ -84,6 +86,7 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
+app.use('/api/v1/health', healthRouter);
 app.use('/api/v1/prices', pricesRouter);
 app.use('/api/v1/disruption', disruptionRouter);
 app.use('/api/v1/impact', impactRouter);
@@ -92,6 +95,7 @@ app.use('/api/v1/events', eventsRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/supply', supplyRouter);
 app.use('/api/v1/llm', llmRouter);
+app.use('/api/v1/aaa', aaaRouter);
 
 // Error handling
 app.use(errorHandler);

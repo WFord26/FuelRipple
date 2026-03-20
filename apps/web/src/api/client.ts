@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const apiClient = axios.create({
+export const apiClient = axios.create({
   baseURL: import.meta.env?.VITE_API_URL || '/api/v1',
   timeout: 30000, // 30s — large historical ranges can be slow
 });
@@ -117,7 +117,7 @@ export const getSeasonalComparison = async (metric = 'gas_regular', region = 'NU
   } | null;
 };
 
-// All states latest prices — one row per state with all fuel types
+// All states latest prices — one row per state with all fuel types (EIA data)
 export const getAllStatePrices = async () => {
   const response = await apiClient.get('/prices/states');
   return response.data.data as {
@@ -130,6 +130,34 @@ export const getAllStatePrices = async () => {
     diesel: number | null;
     time: string;
   }[];
+};
+
+// All states latest AAA prices — one row per state with all fuel types (AAA data)
+export const getAllAaaStatePrices = async () => {
+  const response = await apiClient.get('/aaa/states');
+  return response.data.data as {
+    state: string;
+    time: string;
+    regular: number | null;
+    mid_grade: number | null;
+    premium: number | null;
+    diesel: number | null;
+  }[];
+};
+
+// Fallback: Get single state's EIA price (for states without AAA data)
+export const getStatePrice = async (abbr: string) => {
+  const response = await apiClient.get('/prices/states');
+  const allStates = response.data.data;
+  const stateData = allStates.find((s: any) => s.abbr === abbr.toUpperCase());
+  return stateData ? {
+    time: stateData.time,
+    state: abbr.toUpperCase(),
+    regular: stateData.regular,
+    mid_grade: stateData.midGrade,
+    premium: stateData.premium,
+    diesel: stateData.diesel,
+  } : null;
 };
 
 // Data freshness / status report
@@ -159,6 +187,30 @@ export const getCorrelationPriceSeries = async (region = 'US', weeks = 260) => {
     params: { region, weeks },
   });
   return response.data.data as { week: string; gas_value: number; crude_value: number }[];
+};
+
+// Daily crude oil prices from Yahoo Finance
+export const getDailyCrudePrices = async (metric: 'crude_wti' | 'crude_brent' = 'crude_wti', days = 365) => {
+  const response = await apiClient.get('/correlation/daily-crude', {
+    params: { metric, days },
+  });
+  return response.data.data as { date: string; open: number; high: number; low: number; close: number; avg: number }[];
+};
+
+// Daily AAA gas prices (national average)
+export const getDailyAaaGasPrices = async (metric = 'gas_regular', days = 365) => {
+  const response = await apiClient.get('/correlation/daily-gas-aaa', {
+    params: { metric, days },
+  });
+  return response.data.data as { date: string; value: number }[];
+};
+
+// Daily correlation series: AAA gas + Yahoo crude aligned by date
+export const getDailyCorrelationSeries = async (days = 365) => {
+  const response = await apiClient.get('/correlation/daily-series', {
+    params: { days },
+  });
+  return response.data.data as { date: string; gas_value: number; crude_wti_value: number; crude_brent_value: number }[];
 };
 
 // Events
@@ -216,3 +268,130 @@ export const getSupplyCapacity = async (year?: number) => {
 };
 
 export default apiClient;
+
+// ── AAA National Averages ──────────────────────────────────────────────────
+
+export interface AaaNationalAverage {
+  time: string;
+  regular: number | null;
+  mid_grade: number | null;
+  premium: number | null;
+  diesel: number | null;
+  state_count: number;
+}
+
+export interface AaaNationalChanges {
+  grade: 'regular' | 'mid_grade' | 'premium' | 'diesel';
+  current_price: number | null;
+  week_ago_price: number | null;
+  week_change_pct: number | null;
+  month_ago_price: number | null;
+  month_change_pct: number | null;
+  three_month_ago_price: number | null;
+  three_month_change_pct: number | null;
+  year_ago_price: number | null;
+  year_change_pct: number | null;
+  as_of: string;
+}
+
+/** Latest single-day US national average across all 4 fuel grades */
+export const getAaaNationalLatest = async (): Promise<AaaNationalAverage | null> => {
+  const response = await apiClient.get('/aaa/national/latest');
+  return response.data.data;
+};
+
+/** Recent daily US national averages (default 90 days, newest first) */
+export const getAaaNationalHistory = async (limit = 90): Promise<AaaNationalAverage[]> => {
+  const response = await apiClient.get('/aaa/national', { params: { limit } });
+  return response.data.data;
+};
+
+/** Pre-computed 7d/30d/90d/1y price changes for all 4 grades — compact server-side calculation */
+export const getAaaNationalChanges = async (): Promise<AaaNationalChanges[]> => {
+  const response = await apiClient.get('/aaa/national/changes');
+  return response.data.data;
+};
+
+// ── AAA State-Level Prices ─────────────────────────────────────────────────
+
+export interface AaaStateAverage {
+  time: string;
+  state: string;
+  regular: number | null;
+  mid_grade: number | null;
+  premium: number | null;
+  diesel: number | null;
+}
+
+export interface AaaStateChanges {
+  grade: 'regular' | 'mid_grade' | 'premium' | 'diesel';
+  current_price: number | null;
+  week_ago_price: number | null;
+  week_change_pct: number | null;
+  month_ago_price: number | null;
+  month_change_pct: number | null;
+  three_month_ago_price: number | null;
+  three_month_change_pct: number | null;
+  year_ago_price: number | null;
+  year_change_pct: number | null;
+  as_of: string;
+}
+
+/** Latest single-day AAA state average across all 4 fuel grades */
+export const getAaaStateLatest = async (abbr: string): Promise<AaaStateAverage | null> => {
+  const response = await apiClient.get(`/aaa/state/${abbr}/latest`);
+  return response.data.data;
+};
+
+/** Recent daily AAA state averages (default 90 days, newest first) */
+export const getAaaStateHistory = async (
+  abbr: string,
+  limit = 90
+): Promise<AaaStateAverage[]> => {
+  const response = await apiClient.get(`/aaa/state/${abbr}`, { params: { limit } });
+  return response.data.data;
+};
+
+/** Pre-computed 7d/30d/90d/1y price changes for all 4 grades in a state */
+export const getAaaStateChanges = async (abbr: string): Promise<AaaStateChanges[]> => {
+  const response = await apiClient.get(`/aaa/state/${abbr}/changes`);
+  return response.data.data;
+};
+
+// ── AAA PADD Regional Aggregates ──────────────────────────────────────────
+
+export interface AaaPaddAggregate {
+  padd: string;
+  name: string;    // injected by the route handler
+  time: string;
+  regular_mean:   number | null;
+  mid_grade_mean: number | null;
+  premium_mean:   number | null;
+  diesel_mean:    number | null;
+  regular_wtd:    number | null;
+  mid_grade_wtd:  number | null;
+  premium_wtd:    number | null;
+  diesel_wtd:     number | null;
+  state_count:    number;
+}
+
+/** Latest AAA-derived PADD aggregates for all 5 regions — all 4 grades, mean + pop-weighted */
+export const getAaaPaddRegions = async (): Promise<AaaPaddAggregate[]> => {
+  const response = await apiClient.get('/aaa/regions');
+  return response.data.data;
+};
+
+/** Latest AAA-derived PADD aggregate for a single region */
+export const getAaaPaddRegion = async (padd: string): Promise<AaaPaddAggregate | null> => {
+  const response = await apiClient.get(`/aaa/region/${padd}/latest`);
+  return response.data.data;
+};
+
+/** Recent daily AAA-derived PADD aggregates (default 90 days, newest first) */
+export const getAaaPaddHistory = async (
+  padd: string,
+  limit = 90
+): Promise<AaaPaddAggregate[]> => {
+  const response = await apiClient.get(`/aaa/region/${padd}`, { params: { limit } });
+  return response.data.data;
+};

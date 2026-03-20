@@ -1,0 +1,67 @@
+
+> fuelripple@1.1.0-beta.0 dev
+> turbo run dev
+
+ΓÇó turbo 2.8.14
+ΓÇó Packages in scope: @fuelripple/api, @fuelripple/db, @fuelripple/impact-engine, @fuelripple/shared, @fuelripple/web
+ΓÇó Running dev in 5 packages
+ΓÇó Remote caching disabled
+@fuelripple/shared:dev: cache bypass, force executing 6db4d00d0a9c0b78
+@fuelripple/api:dev: cache bypass, force executing c48f839047134d1e
+@fuelripple/impact-engine:dev: cache bypass, force executing a8e541f9b8bfc811
+@fuelripple/db:dev: cache bypass, force executing 60e96a8608d988c0
+@fuelripple/web:dev: cache bypass, force executing 83e1eb6f90dd7d0e
+@fuelripple/shared:dev: 
+@fuelripple/shared:dev: > @fuelripple/shared@1.0.0 dev
+@fuelripple/shared:dev: > tsc --watch
+@fuelripple/shared:dev: 
+@fuelripple/api:dev: 
+@fuelripple/api:dev: > @fuelripple/api@1.1.0-beta.0 dev
+@fuelripple/api:dev: > tsx watch src/index.ts
+@fuelripple/api:dev: 
+@fuelripple/impact-engine:dev: 
+@fuelripple/impact-engine:dev: > @fuelripple/impact-engine@1.0.0 dev
+@fuelripple/impact-engine:dev: > tsc --watch
+@fuelripple/impact-engine:dev: 
+@fuelripple/db:dev: 
+@fuelripple/db:dev: > @fuelripple/db@1.0.0 dev
+@fuelripple/db:dev: > tsc --watch
+@fuelripple/db:dev: 
+@fuelripple/shared:dev: [2J[3J[H6:53:36 PM - Starting compilation in watch mode...
+@fuelripple/shared:dev: 
+@fuelripple/db:dev: [2J[3J[H6:53:36 PM - Starting compilation in watch mode...
+@fuelripple/db:dev: 
+@fuelripple/impact-engine:dev: [2J[3J[H6:53:36 PM - Starting compilation in watch mode...
+@fuelripple/impact-engine:dev: 
+@fuelripple/web:dev: 
+@fuelripple/web:dev: > @fuelripple/web@1.1.0-beta.0 dev
+@fuelripple/web:dev: > vite
+@fuelripple/web:dev: 
+@fuelripple/impact-engine:dev: 
+@fuelripple/impact-engine:dev: 6:53:45 PM - Found 0 errors. Watching for file changes.
+@fuelripple/db:dev: 
+@fuelripple/db:dev: 6:53:46 PM - Found 0 errors. Watching for file changes.
+@fuelripple/shared:dev: 
+@fuelripple/shared:dev: 6:53:46 PM - Found 0 errors. Watching for file changes.
+@fuelripple/web:dev: Port 5173 is in use, trying another one...
+@fuelripple/web:dev: 
+@fuelripple/web:dev:   [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m4829[22m[2m[0m ms[22m
+@fuelripple/web:dev: 
+@fuelripple/web:dev:   [32mΓ₧£[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5174[22m/[39m
+@fuelripple/web:dev: [2m  [32mΓ₧£[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+@fuelripple/api:dev: ≡ƒôè Application Insights telemetry active
+@fuelripple/api:dev: Γ£à Job queue initialized
+@fuelripple/api:dev: Γ£à Worker started
+@fuelripple/api:dev: ≡ƒÜÇ FuelRipple API server running on port 3001
+@fuelripple/api:dev: ≡ƒôè Environment: development
+@fuelripple/api:dev: ≡ƒîÉ CORS origins: http://localhost:5173, http://localhost:5174
+@fuelripple/api:dev: ≡ƒùä∩╕Å  Database: configured
+@fuelripple/api:dev: ≡ƒôª Redis: configured
+@fuelripple/api:dev: Γ£à Redis L2 cache connected
+@fuelripple/api:dev: IMPORTANT! Eviction policy is optimistic-volatile. It should be "noeviction"
+@fuelripple/api:dev: IMPORTANT! Eviction policy is optimistic-volatile. It should be "noeviction"
+@fuelripple/api:dev: IMPORTANT! Eviction policy is optimistic-volatile. It should be "noeviction"
+@fuelripple/api:dev: IMPORTANT! Eviction policy is optimistic-volatile. It should be "noeviction"
+@fuelripple/api:dev: Γ£à Jobs scheduled
+@fuelripple/web:dev: [2m6:54:47 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/content/components/ArticleChart.tsx, /src/index.css[22m
+@fuelripple/web:dev: [2m6:56:34 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/content/components/ArticleChart.tsx, /src/index.css[22m

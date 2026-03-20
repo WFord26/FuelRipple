@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { getCurrentPrices, getDisruptionScore, getTypicalImpact, getRegionalComparison, getPriceChanges, getSupplyHealth, getDownstreamImpact, getVolatility, getEvents, getSupplyInventories, getCurrentCrudePrice, getSeasonalComparison } from '../api/client';
+import { getCurrentPrices, getDisruptionScore, getTypicalImpact, getRegionalComparison, getPriceChanges, getSupplyHealth, getDownstreamImpact, getVolatility, getEvents, getSupplyInventories, getCurrentCrudePrice, getSeasonalComparison, getAaaNationalChanges } from '../api/client';
 import DisruptionMeter from '../components/DisruptionMeter';
 import USPriceMap from '../components/USPriceMap';
 import { usePageSEO } from '../hooks/usePageSEO';
@@ -44,7 +44,7 @@ export default function Dashboard() {
     canonicalPath: '/',
   });
 
-  const { data: prices, isLoading: pricesLoading } = useQuery({
+  const { isLoading: pricesLoading } = useQuery({
     queryKey: ['currentPrices', fuelType],
     queryFn: () => getCurrentPrices(fuelType),
   });
@@ -113,6 +113,12 @@ export default function Dashboard() {
     staleTime: 24 * 60 * 60 * 1000,
   });
 
+  const { data: aaaChanges } = useQuery({
+    queryKey: ['aaaNationalChanges'],
+    queryFn: getAaaNationalChanges,
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+
   if (pricesLoading || disruptionLoading || impactLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -120,8 +126,6 @@ export default function Dashboard() {
       </div>
     );
   }
-
-  const nationalPrice = prices?.find((p: any) => p.region === 'NUS' || p.region === 'US');
 
   return (
     <div className="space-y-6">
@@ -155,68 +159,61 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* National Average — 5 squares */}
+      {/* National Average — Dynamic based on fuel type */}
       <div>
-        <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">National Average</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {/* Current */}
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 flex flex-col items-center justify-center text-center">
-            <div className="text-xs text-slate-400 mb-1 uppercase tracking-wide">Current</div>
-            <div className="text-2xl font-bold text-white">${nationalPrice?.value.toFixed(3)}</div>
-            <div className="text-xs text-slate-500 mt-0.5">per gallon</div>
-          </div>
+        <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">National Average (AAA) — {fuelType === 'diesel' ? 'Diesel' : 'Gasoline Grades'}</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-700">
+                <th className="text-left px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">Grade</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">Current</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">1 Week Ago</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">Change</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">1 Month Ago</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">Change</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">3 Months Ago</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">Change</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">1 Year Ago</th>
+                <th className="text-center px-3 py-2 text-slate-400 font-semibold uppercase text-xs tracking-wider">Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(fuelType === 'diesel'
+                ? ['diesel' as const]
+                : ['regular' as const, 'mid_grade' as const, 'premium' as const]
+              ).map((key) => {
+                const row = aaaChanges?.find(r => r.grade === key);
+                const LABELS: Record<string, string> = {
+                  regular: 'Regular', mid_grade: 'Mid-Grade', premium: 'Premium', diesel: 'Diesel',
+                };
 
-          {/* 1 Week */}
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 flex flex-col items-center justify-center text-center">
-            <div className="text-xs text-slate-400 mb-1 uppercase tracking-wide">1 Week Ago</div>
-            <div className="text-2xl font-bold text-white">
-              {priceChanges?.weekAgoPrice != null ? `$${priceChanges.weekAgoPrice.toFixed(3)}` : '—'}
-            </div>
-            {priceChanges?.weekChangePct != null && (
-              <span className={`mt-1 inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${priceChanges.weekChangePct >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>
-                {priceChanges.weekChangePct >= 0 ? '▲' : '▼'} {Math.abs(priceChanges.weekChangePct).toFixed(2)}%
-              </span>
-            )}
-          </div>
+                const ChangeCell = ({ pct }: { pct: number | null | undefined }) =>
+                  pct != null ? (
+                    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded ${pct >= 0 ? 'bg-red-900/40 text-red-300' : 'bg-green-900/40 text-green-300'}`}>
+                      {pct >= 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(2)}%
+                    </span>
+                  ) : (
+                    <span className="text-slate-600">—</span>
+                  );
 
-          {/* 1 Month */}
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 flex flex-col items-center justify-center text-center">
-            <div className="text-xs text-slate-400 mb-1 uppercase tracking-wide">1 Month Ago</div>
-            <div className="text-2xl font-bold text-white">
-              {priceChanges?.monthAgoPrice != null ? `$${priceChanges.monthAgoPrice.toFixed(3)}` : '—'}
-            </div>
-            {priceChanges?.monthChangePct != null && (
-              <span className={`mt-1 inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${priceChanges.monthChangePct >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>
-                {priceChanges.monthChangePct >= 0 ? '▲' : '▼'} {Math.abs(priceChanges.monthChangePct).toFixed(2)}%
-              </span>
-            )}
-          </div>
-
-          {/* 3 Month */}
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 flex flex-col items-center justify-center text-center">
-            <div className="text-xs text-slate-400 mb-1 uppercase tracking-wide">3 Months Ago</div>
-            <div className="text-2xl font-bold text-white">
-              {priceChanges?.threeMonthAgoPrice != null ? `$${priceChanges.threeMonthAgoPrice.toFixed(3)}` : '—'}
-            </div>
-            {priceChanges?.threeMonthChangePct != null && (
-              <span className={`mt-1 inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${priceChanges.threeMonthChangePct >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>
-                {priceChanges.threeMonthChangePct >= 0 ? '▲' : '▼'} {Math.abs(priceChanges.threeMonthChangePct).toFixed(2)}%
-              </span>
-            )}
-          </div>
-
-          {/* 1 Year */}
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 flex flex-col items-center justify-center text-center">
-            <div className="text-xs text-slate-400 mb-1 uppercase tracking-wide">1 Year Ago</div>
-            <div className="text-2xl font-bold text-white">
-              {priceChanges?.yearAgoPrice != null ? `$${priceChanges.yearAgoPrice.toFixed(3)}` : '—'}
-            </div>
-            {priceChanges?.yearChangePct != null && (
-              <span className={`mt-1 inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${priceChanges.yearChangePct >= 0 ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>
-                {priceChanges.yearChangePct >= 0 ? '▲' : '▼'} {Math.abs(priceChanges.yearChangePct).toFixed(2)}%
-              </span>
-            )}
-          </div>
+                return (
+                  <tr key={key} className="border-b border-slate-700/50 hover:bg-slate-800/30 transition-colors">
+                    <td className="px-3 py-2 text-slate-300 font-medium">{LABELS[key]}</td>
+                    <td className="text-center px-3 py-2 text-white font-semibold">{row?.current_price != null ? `$${row.current_price.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2 text-slate-300">{row?.week_ago_price != null ? `$${row.week_ago_price.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2"><ChangeCell pct={row?.week_change_pct} /></td>
+                    <td className="text-center px-3 py-2 text-slate-300">{row?.month_ago_price != null ? `$${row.month_ago_price.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2"><ChangeCell pct={row?.month_change_pct} /></td>
+                    <td className="text-center px-3 py-2 text-slate-300">{row?.three_month_ago_price != null ? `$${row.three_month_ago_price.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2"><ChangeCell pct={row?.three_month_change_pct} /></td>
+                    <td className="text-center px-3 py-2 text-slate-300">{row?.year_ago_price != null ? `$${row.year_ago_price.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2"><ChangeCell pct={row?.year_change_pct} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -329,11 +326,18 @@ export default function Dashboard() {
 
       {/* Daily US Consumer Spend */}
       {priceChanges && (() => {
+        const aaaGradeKey = fuelType === 'diesel' ? 'diesel' : 'regular';
+        const aaaGrade = aaaChanges?.find(g => g.grade === aaaGradeKey);
+        const displayPrice = aaaGrade?.current_price ?? priceChanges.currentPrice;
+        const priceLabel = aaaGrade?.current_price != null ? 'AAA national avg' : 'latest weekly national avg';
         const gal = priceChanges.dailyGallonsUs;
-        const todayCost  = priceChanges.dailyConsumerCost;
-        const weekCost        = priceChanges.weekAgoPrice       != null ? priceChanges.weekAgoPrice       * gal : null;
-        const monthCost       = priceChanges.monthAgoPrice      != null ? priceChanges.monthAgoPrice      * gal : null;
-        const threeMonthCost  = priceChanges.threeMonthAgoPrice != null ? priceChanges.threeMonthAgoPrice * gal : null;
+        const todayCost  = displayPrice * gal;
+        const weekPrice        = aaaGrade?.week_ago_price       ?? priceChanges.weekAgoPrice;
+        const monthPrice       = aaaGrade?.month_ago_price      ?? priceChanges.monthAgoPrice;
+        const threeMonthPrice  = aaaGrade?.three_month_ago_price ?? priceChanges.threeMonthAgoPrice;
+        const weekCost        = weekPrice       != null ? weekPrice       * gal : null;
+        const monthCost       = monthPrice      != null ? monthPrice      * gal : null;
+        const threeMonthCost  = threeMonthPrice != null ? threeMonthPrice * gal : null;
         const vsWeekDelta       = weekCost       != null ? todayCost - weekCost       : null;
         const vsMonthDelta      = monthCost      != null ? todayCost - monthCost      : null;
         const vsThreeMonthDelta = threeMonthCost != null ? todayCost - threeMonthCost : null;
@@ -361,8 +365,8 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div>
                 <div className="text-xs text-slate-400 mb-1">Price per Gallon</div>
-                <div className="text-2xl font-bold text-white">${priceChanges.currentPrice.toFixed(3)}</div>
-                <div className="text-xs text-slate-500 mt-0.5">latest weekly national avg</div>
+                <div className="text-2xl font-bold text-white">${displayPrice.toFixed(3)}</div>
+                <div className="text-xs text-slate-500 mt-0.5">{priceLabel}</div>
               </div>
               <div>
                 <div className="text-xs text-slate-400 mb-1">Daily Gallons Purchased</div>
@@ -586,7 +590,7 @@ export default function Dashboard() {
       )}
 
       {/* Regional Breakdown */}
-      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 overflow-hidden">
         <h3 className="text-xl font-bold text-white mb-2">Regional Prices</h3>
         <p className="text-xs text-slate-500 mb-4">Click a state for detailed breakdown</p>
         <USPriceMap comparisonData={comparisonData ?? []} height={380} onStateClick={(abbr) => navigate(`/state/${abbr}`)} />

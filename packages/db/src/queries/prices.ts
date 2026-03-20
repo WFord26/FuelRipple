@@ -1,6 +1,6 @@
 import { Knex } from 'knex';
 import { getKnex } from '../index';
-import { EnergyPrice } from '@fuelripple/shared';
+import { EnergyPrice, SOURCE_PRIORITY } from '@fuelripple/shared';
 
 /**
  * Insert energy prices with deduplication.
@@ -39,7 +39,7 @@ export async function insertPrices(prices: EnergyPrice[]): Promise<void> {
  */
 export async function refreshMaterializedViews(): Promise<void> {
   const knex = getKnex();
-  for (const view of ['daily_prices', 'weekly_prices', 'monthly_prices']) {
+  for (const view of ['daily_prices', 'weekly_prices', 'monthly_prices', 'inventory_statistics_52w']) {
     try {
       await knex.raw(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view};`);
       console.log(`  ✅ ${view} refreshed`);
@@ -69,13 +69,149 @@ export async function getCurrentPrices(metric: string): Promise<any[]> {
   // Limit scan to recent 4 weeks to avoid locking every hypertable chunk.
   // energy_prices is partitioned on `time`; an unbounded scan exhausts
   // max_locks_per_transaction on Azure PG Flexible Server.
-  return knex.raw(`
-    SELECT DISTINCT ON (region) region, value, time
+  // Prioritizes AAA over EIA for gas prices.
+  const result = await knex.raw(`
+    SELECT DISTINCT ON (region) region, metric, value, time, source
     FROM energy_prices
     WHERE metric = ?
       AND time >= NOW() - INTERVAL '4 weeks'
-    ORDER BY region, time DESC
-  `, [metric]).then(result => result.rows);
+    ORDER BY region,
+      CASE source
+        WHEN 'aaa' THEN 100
+        WHEN 'aaa_wayback' THEN 95
+        WHEN 'eia' THEN 50
+        WHEN 'fred' THEN 40
+        WHEN 'market' THEN 30
+        ELSE 0
+      END DESC,
+      time DESC
+  `, [metric]);
+  
+  return Array.isArray(result) ? result : (result.rows ?? []);
+}
+
+/**
+ * Upsert into latest_prices snapshot table.
+ * Maintains current price for each (region, metric) pair in O(1) lookup table.
+ * Called after each price ingestion to keep snapshot up-to-date.
+ * 
+ * IMPORTANT: Respects SOURCE_PRIORITY to avoid lower-priority sources overwriting
+ * higher-priority ones. AAA (priority 100) will never be overwritten by EIA (priority 50).
+ */
+export async function upsertLatestPrices(prices: EnergyPrice[]): Promise<void> {
+  if (prices.length === 0) return;
+  const knex = getKnex();
+
+  for (const p of prices) {
+    // Get current row to check priority
+    const existing = await knex('latest_prices')
+      .where('region', p.region)
+      .where('metric', p.metric)
+      .first();
+    
+    // Get priority for incoming vs existing source
+    const incomingPriority = SOURCE_PRIORITY[p.source as keyof typeof SOURCE_PRIORITY] ?? 0;
+    const existingPriority = existing ? (SOURCE_PRIORITY[(existing.source as keyof typeof SOURCE_PRIORITY)] ?? 0) : 0;
+    
+    // Only update if incoming source has higher priority, or no existing data
+    if (!existing || incomingPriority >= existingPriority) {
+      await knex('latest_prices')
+        .insert({
+          region: p.region,
+          metric: p.metric,
+          value: p.value,
+          time: p.time,
+          source: p.source,
+        })
+        .onConflict(['region', 'metric'])
+        .merge(['value', 'time', 'source']);
+    }
+  }
+}
+
+export interface PriceChangesRow {
+  metric: string;
+  region: string;
+  current_price: number | null;
+  week_ago_price: number | null;
+  week_change_pct: number | null;
+  month_ago_price: number | null;
+  month_change_pct: number | null;
+  three_month_ago_price: number | null;
+  three_month_change_pct: number | null;
+  year_ago_price: number | null;
+  year_change_pct: number | null;
+  updated_at?: Date;
+}
+
+/**
+ * Upsert pre-computed price change snapshots into price_changes_cache.
+ * Called by the job queue after each EIA ingest so /prices/changes is O(1).
+ */
+export async function upsertPriceChangesCache(rows: PriceChangesRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  const knex = getKnex();
+  const MERGE_COLS = [
+    'current_price', 'week_ago_price', 'week_change_pct',
+    'month_ago_price', 'month_change_pct',
+    'three_month_ago_price', 'three_month_change_pct',
+    'year_ago_price', 'year_change_pct', 'updated_at',
+  ] as const;
+
+  for (const row of rows) {
+    await knex('price_changes_cache')
+      .insert({ ...row, updated_at: new Date() })
+      .onConflict(['metric', 'region'])
+      .merge(MERGE_COLS);
+  }
+}
+
+/**
+ * Retrieve pre-computed price changes for a given metric + region.
+ * Returns null if the cache has not been populated yet.
+ */
+export async function getPriceChangesFromCache(
+  metric: string,
+  region: string
+): Promise<PriceChangesRow | null> {
+  const knex = getKnex();
+  const row = await knex('price_changes_cache')
+    .where({ metric, region })
+    .first();
+  return row ?? null;
+}
+
+/**
+ * Get latest prices for all regions for a given metric.
+ * Fast O(1) lookup from snapshot table (alternative to hypertable scan).
+ * Prefers AAA over EIA by weight source priority in the query.
+ */
+export async function getLatestPricesSnapshot(metric?: string): Promise<any[]> {
+  const knex = getKnex();
+  
+  let query = `
+    SELECT DISTINCT ON (region, metric) 
+      region, metric, value, time, source
+    FROM latest_prices
+    ${metric ? 'WHERE metric = ?' : ''}
+    ORDER BY region, metric,
+      CASE source
+        WHEN 'aaa' THEN 100
+        WHEN 'aaa_wayback' THEN 95
+        WHEN 'eia' THEN 50
+        WHEN 'fred' THEN 40
+        WHEN 'market' THEN 30
+        ELSE 0
+      END DESC,
+      time DESC
+  `;
+  
+  const results = metric 
+    ? await knex.raw(query, [metric])
+    : await knex.raw(query);
+  
+  // Handle both { rows: [] } and [] depending on driver
+  return Array.isArray(results) ? results : (results.rows ?? []);
 }
 
 /**
@@ -344,15 +480,15 @@ export async function getCorrelationSeries(options: {
   })();
   const end = endDate ?? new Date().toISOString().slice(0, 10);
 
+  // Updated to use AAA national averages for gas_regular instead of EIA
   return knex.raw(`
     WITH
       gas_weekly AS (
         SELECT
           DATE_TRUNC('week', time) AS week,
           AVG(value)               AS gas_value
-        FROM   energy_prices
+        FROM   aaa_national_averages
         WHERE  metric = 'gas_regular'
-          AND  region = ?
           AND  time BETWEEN ?::timestamptz AND ?::timestamptz
         GROUP BY 1
       ),
@@ -363,6 +499,7 @@ export async function getCorrelationSeries(options: {
         FROM   energy_prices
         WHERE  metric = 'crude_wti'
           AND  region = 'US'
+          AND  source = 'yahoo'
           AND  time BETWEEN ?::timestamptz AND ?::timestamptz
         GROUP BY 1
       )
@@ -374,7 +511,7 @@ export async function getCorrelationSeries(options: {
     JOIN   crude_weekly c USING (week)
     ORDER BY 1
     LIMIT  ?
-  `, [gasRegion, start, end, start, end, weeks])
+  `, [start, end, start, end, weeks])
     .then((r: any) => r.rows);
 }
 
@@ -467,4 +604,121 @@ export async function detectDataGaps(
       row.actual_next_time && row.expected_time < row.actual_next_time
     )
   );
+}
+
+/**
+ * Get daily crude oil prices (WTI and Brent) from Yahoo Finance.
+ * Returns daily OHLC data sorted newest → oldest, limited to last N days.
+ */
+export async function getDailyCrudePrices(
+  days: number = 365,
+  metric: 'crude_wti' | 'crude_brent' = 'crude_wti'
+): Promise<any[]> {
+  const knex = getKnex();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+
+  return knex.raw(`
+    SELECT
+      DATE(time)::text as date,
+      metric,
+      MIN(value) as low,
+      MAX(value) as high,
+      (ARRAY_AGG(value ORDER BY time))[1] as open,
+      (ARRAY_AGG(value ORDER BY time DESC))[1] as close,
+      AVG(value) as avg,
+      COUNT(*) as data_points
+    FROM energy_prices
+    WHERE metric = ?
+      AND region = 'US'
+      AND source = 'yahoo'
+      AND time >= ?::timestamptz
+    GROUP BY DATE(time), metric
+    ORDER BY DATE(time) DESC
+    LIMIT ?
+  `, [metric, cutoff.toISOString(), days]).then(result => result.rows);
+}
+
+/**
+ * Get daily gas prices from AAA (national average).
+ * Returns daily prices sorted newest → oldest, limited to last N days.
+ * Uses aaa_national_averages table for efficiency.
+ */
+export async function getDailyAaaGasPrices(
+  days: number = 365,
+  metric: string = 'gas_regular'
+): Promise<any[]> {
+  const knex = getKnex();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+
+  return knex.raw(`
+    SELECT
+      time::text as date,
+      metric,
+      value,
+      value as close
+    FROM aaa_national_averages
+    WHERE metric = ?
+      AND time >= ?::timestamptz
+    ORDER BY time DESC
+    LIMIT ?
+  `, [metric, cutoff.toISOString(), days]).then(result => result.rows);
+}
+
+/**
+ * Get daily correlation series: aligned daily gas (AAA) and crude (Yahoo) prices.
+ * Returns both metrics as daily points (not weekly buckets) for intraday resolution.
+ */
+export async function getDailyCorrelationSeries(
+  days: number = 365
+): Promise<{ date: string; gas_value: number; crude_wti_value: number; crude_brent_value: number }[]> {
+  const knex = getKnex();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+
+  return knex.raw(`
+    WITH gas_daily AS (
+      SELECT
+        DATE(time) as date,
+        AVG(value) as gas_value
+      FROM aaa_national_averages
+      WHERE metric = 'gas_regular'
+        AND time >= ?::timestamptz
+      GROUP BY DATE(time)
+    ),
+    crude_wti_daily AS (
+      SELECT
+        DATE(time) as date,
+        AVG(value) as crude_wti_value
+      FROM energy_prices
+      WHERE metric = 'crude_wti'
+        AND region = 'US'
+        AND source = 'yahoo'
+        AND time >= ?::timestamptz
+      GROUP BY DATE(time)
+    ),
+    crude_brent_daily AS (
+      SELECT
+        DATE(time) as date,
+        AVG(value) as crude_brent_value
+      FROM energy_prices
+      WHERE metric = 'crude_brent'
+        AND region = 'US'
+        AND source = 'yahoo'
+        AND time >= ?::timestamptz
+      GROUP BY DATE(time)
+    )
+    SELECT
+      g.date::text,
+      g.gas_value,
+      c_wti.crude_wti_value,
+      c_brent.crude_brent_value
+    FROM gas_daily g
+    LEFT JOIN crude_wti_daily c_wti USING (date)
+    LEFT JOIN crude_brent_daily c_brent USING (date)
+    ORDER BY g.date DESC
+    LIMIT ?
+  `, [cutoff.toISOString(), cutoff.toISOString(), cutoff.toISOString(), days])
+    .then(result => result.rows);
 }

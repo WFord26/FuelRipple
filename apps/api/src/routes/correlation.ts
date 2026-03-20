@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { getCorrelationSeries } from '@fuelripple/db';
+import { getCorrelationSeries, getDailyCrudePrices, getDailyAaaGasPrices, getDailyCorrelationSeries } from '@fuelripple/db';
 import { calculateCrossCorrelation, analyzeRocketsAndFeathers } from '@fuelripple/impact-engine';
 import { cacheOrFetch } from '../services/cache';
 import { CACHE_TTL } from '@fuelripple/shared';
@@ -138,6 +138,71 @@ router.get('/price-series', async (req: Request, res: Response, next: NextFuncti
       `correlation:price-series:${gasRegion}:${weeks}`,
       () => getCorrelationSeries({ gasRegion, weeks }),
       CACHE_TTL.WEEKLY_GAS
+    );
+
+    res.json({ status: 'success', data: series, count: series.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/correlation/daily-crude
+ * Returns daily crude oil prices (WTI or Brent) from Yahoo Finance.
+ * Query params: metric (crude_wti | crude_brent, default: crude_wti), days (default: 365)
+ */
+router.get('/daily-crude', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const metric = (req.query.metric as 'crude_wti' | 'crude_brent') || 'crude_wti';
+    const days   = Math.min(parseInt(req.query.days as string) || 365, 1825); // cap at 5 years
+
+    const prices = await cacheOrFetch(
+      `correlation:daily-crude:${metric}:${days}`,
+      () => getDailyCrudePrices(days, metric),
+      CACHE_TTL.DAILY_CRUDE || 6 * 60 * 60 * 1000 // 6 hours
+    );
+
+    res.json({ status: 'success', data: prices, count: prices.length, metric });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/correlation/daily-gas-aaa
+ * Returns daily gas prices from AAA national average.
+ * Query params: metric (default: gas_regular), days (default: 365)
+ */
+router.get('/daily-gas-aaa', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const metric = (req.query.metric as string) || 'gas_regular';
+    const days   = Math.min(parseInt(req.query.days as string) || 365, 1825); // cap at 5 years
+
+    const prices = await cacheOrFetch(
+      `correlation:daily-gas-aaa:${metric}:${days}`,
+      () => getDailyAaaGasPrices(days, metric),
+      CACHE_TTL.AAA_NATIONAL || 24 * 60 * 60 * 1000 // 24 hours
+    );
+
+    res.json({ status: 'success', data: prices, count: prices.length, metric });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/correlation/daily-series
+ * Returns daily correlation series: AAA gas + Yahoo crude (WTI/Brent) aligned by date.
+ * Query params: days (default: 365)
+ */
+router.get('/daily-series', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const days = Math.min(parseInt(req.query.days as string) || 365, 1825); // cap at 5 years
+
+    const series = await cacheOrFetch(
+      `correlation:daily-series:${days}`,
+      () => getDailyCorrelationSeries(days),
+      CACHE_TTL.DAILY_CRUDE || 6 * 60 * 60 * 1000 // 6 hours
     );
 
     res.json({ status: 'success', data: series, count: series.length });

@@ -163,6 +163,9 @@ export async function getProductionData(region: string = 'US', weeks: number = 5
  * than a true 5-year seasonal average (architecture §4.6.2 spec).  The project
  * doesn't yet have 5 years of data; when it does, switch to a same-calendar-week
  * comparison across multiple years for proper seasonal normalisation.
+ *
+ * Uses the continuous aggregate `inventory_statistics_52w` to pre-compute rolling
+ * stats, eliminating expensive window functions and excessive lock contention.
  */
 export async function getInventoryData(region: string = 'US', weeks: number = 104): Promise<any[]> {
   const knex = getKnex();
@@ -178,6 +181,10 @@ export async function getInventoryData(region: string = 'US', weeks: number = 10
         distillate_production,
         product_supplied_gas,
         product_supplied_dist,
+        gasoline_stocks_52w_avg,
+        gasoline_stocks_52w_stddev,
+        distillate_stocks_52w_avg,
+        distillate_stocks_52w_stddev,
         -- Gasoline days-of-supply: stocks / daily implied demand
         -- Prefer product_supplied (true demand), fall back to production proxy
         CASE
@@ -190,30 +197,9 @@ export async function getInventoryData(region: string = 'US', weeks: number = 10
           WHEN COALESCE(product_supplied_dist, distillate_production) > 0
           THEN (distillate_stocks / (COALESCE(product_supplied_dist, distillate_production) / 7.0))
           ELSE NULL
-        END AS distillate_days_supply,
-        AVG(gasoline_stocks) OVER (
-          PARTITION BY region
-          ORDER BY time
-          ROWS BETWEEN 51 PRECEDING AND CURRENT ROW
-        ) AS gasoline_stocks_52w_avg,
-        STDDEV(gasoline_stocks) OVER (
-          PARTITION BY region
-          ORDER BY time
-          ROWS BETWEEN 51 PRECEDING AND CURRENT ROW
-        ) AS gasoline_stocks_52w_stddev,
-        AVG(distillate_stocks) OVER (
-          PARTITION BY region
-          ORDER BY time
-          ROWS BETWEEN 51 PRECEDING AND CURRENT ROW
-        ) AS distillate_stocks_52w_avg,
-        STDDEV(distillate_stocks) OVER (
-          PARTITION BY region
-          ORDER BY time
-          ROWS BETWEEN 51 PRECEDING AND CURRENT ROW
-        ) AS distillate_stocks_52w_stddev
-      FROM refinery_operations
+        END AS distillate_days_supply
+      FROM inventory_statistics_52w
       WHERE region = ?
-        AND gasoline_stocks IS NOT NULL
         AND time >= NOW() - ((? + 52) * INTERVAL '1 week')
     )
     SELECT

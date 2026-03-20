@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { getRegionalComparison } from '../api/client';
+import { getAaaPaddRegions, getAllAaaStatePrices } from '../api/client';
 import { usePageSEO } from '../hooks/usePageSEO';
 import { Chart, Settings, BarSeries, Axis, DARK_THEME, ScaleType, Position, Tooltip } from '@elastic/charts';
 import '@elastic/charts/dist/theme_dark.css';
@@ -18,6 +18,15 @@ const barTheme = {
     },
   },
 };
+
+// Grade display config
+const GRADES = [
+  { key: 'regular',   label: 'Regular' },
+  { key: 'mid_grade', label: 'Mid-Grade' },
+  { key: 'premium',   label: 'Premium' },
+  { key: 'diesel',    label: 'Diesel' },
+] as const;
+type GradeKey = typeof GRADES[number]['key'];
 
 interface StateEntry {
   abbr: string;
@@ -79,20 +88,74 @@ const PADD_REGIONS: { code: string; name: string; color: string; allStates: Stat
   },
 ];
 
+// State abbr → display name lookup
+const STATE_NAMES: Record<string, string> = Object.fromEntries(
+  PADD_REGIONS.flatMap(r => r.allStates.map(s => [s.abbr, s.name]))
+);
+
 export default function Comparison() {
   usePageSEO({
     title: 'Regional Gas Price Comparison',
-    description: 'Compare gasoline prices across all 5 PADD regions and 50 states. See which regions pay the most and least, and explore state-level breakdowns updated weekly by EIA.',
+    description: 'Compare gasoline and diesel prices across all 5 PADD regions and all 50 states. Updated daily from AAA price data.',
     canonicalPath: '/comparison',
   });
 
+  const [grade, setGrade] = useState<GradeKey>('regular');
+  const [method, setMethod] = useState<'mean' | 'wtd'>('wtd');
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
 
-  const { data: comparisonData, isLoading } = useQuery({
-    queryKey: ['priceComparison'],
-    queryFn: () => getRegionalComparison('gas_regular'),
+  const { data: paddData, isLoading: paddLoading } = useQuery({
+    queryKey: ['aaaPaddRegions'],
+    queryFn: () => getAaaPaddRegions(),
   });
+
+  const { data: stateData } = useQuery({
+    queryKey: ['aaaAllStates'],
+    queryFn: () => getAllAaaStatePrices(),
+  });
+
+  const isLoading = paddLoading;
+
+  // Build the price key for selected grade + method: e.g. 'regular_wtd'
+  const priceKey = `${grade}_${method}` as keyof NonNullable<typeof paddData>[number];
+
+  // Build the USPriceMap-compatible comparisonData from AAA sources
+  const comparisonData = useMemo(() => {
+    if (!paddData) return [];
+    return PADD_REGIONS.map(region => {
+      const paddRow = paddData.find(p => p.padd === region.code);
+      const paddValue = paddRow ? (paddRow[priceKey] as number | null) ?? 0 : 0;
+
+      // State list: all AAA-reported states in this PADD, sorted high→low
+      const states = region.allStates
+        .map(s => {
+          const stateRow = stateData?.find(r => r.state === s.abbr);
+          const price = stateRow ? (stateRow[grade] as number | null) : null;
+          return { abbr: s.abbr, name: s.name, value: price };
+        })
+        .filter((s): s is { abbr: string; name: string; value: number } => s.value !== null)
+        .sort((a, b) => b.value - a.value);
+
+      return { region: region.code, value: paddValue, states };
+    });
+  }, [paddData, stateData, priceKey, grade]);
+
+  // Summary stats computed from PADD values
+  const { nationalAvg, minPrice, maxPrice, priceSpread } = useMemo(() => {
+    const values = comparisonData.map(d => d.value).filter(v => v > 0);
+    if (values.length === 0) return { nationalAvg: 0, minPrice: 0, maxPrice: 0, priceSpread: 0 };
+    const nationalAvg = values.reduce((a, b) => a + b, 0) / values.length;
+    const minPrice = Math.min(...values);
+    const maxPrice = Math.max(...values);
+    return { nationalAvg, minPrice, maxPrice, priceSpread: maxPrice - minPrice };
+  }, [comparisonData]);
+
+  // Derive chart data from the PADD comparison data
+  const chartData = PADD_REGIONS.map(region => {
+    const d = comparisonData.find(c => c.region === region.code);
+    return { name: region.name, price: d?.value || 0, code: region.code, color: region.color };
+  }).filter(d => d.price > 0);
 
   const toggleRegion = (code: string) => {
     setExpandedRegions(prev => {
@@ -102,30 +165,57 @@ export default function Comparison() {
     });
   };
 
-  // Transform PADD data for chart
-  const chartData = PADD_REGIONS.map(region => {
-    const regionData = comparisonData?.find((d: any) => d.region === region.code);
-    return {
-      name: region.name,
-      price: regionData?.value || 0,
-      code: region.code,
-      color: region.color,
-    };
-  }).filter(d => d.price > 0);
-
-  const nationalAvg = chartData.length > 0
-    ? chartData.reduce((sum, d) => sum + d.price, 0) / chartData.length
-    : 0;
-  const minPrice = chartData.length > 0 ? Math.min(...chartData.map(d => d.price)) : 0;
-  const maxPrice = chartData.length > 0 ? Math.max(...chartData.map(d => d.price)) : 0;
-  const priceSpread = maxPrice - minPrice;
-
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h2 className="text-3xl font-bold text-white mb-2">Regional Comparison</h2>
-        <p className="text-slate-400">Compare gasoline prices across US PADD regions — click a region to see state breakdown</p>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold text-white mb-2">Regional Comparison</h2>
+          <p className="text-slate-400">Compare prices across US PADD regions — click a region to see all state prices</p>
+        </div>
+        {/* Grade + method controls */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex rounded-lg overflow-hidden border border-slate-600">
+            {GRADES.map(g => (
+              <button
+                key={g.key}
+                onClick={() => setGrade(g.key)}
+                className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                  grade === g.key
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex rounded-lg overflow-hidden border border-slate-600">
+            <button
+              onClick={() => setMethod('wtd')}
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                method === 'wtd'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+              }`}
+              title="Population-weighted mean (2020 Census)"
+            >
+              Pop. Weighted
+            </button>
+            <button
+              onClick={() => setMethod('mean')}
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                method === 'mean'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+              }`}
+              title="Simple arithmetic mean across reporting states"
+            >
+              Mean
+            </button>
+          </div>
+          <span className="text-xs text-slate-500 px-1">Source: AAA · Daily</span>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -150,7 +240,7 @@ export default function Comparison() {
       </div>
 
       {/* US Choropleth Map */}
-      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 overflow-hidden">
         <h3 className="text-lg font-semibold text-white mb-2">Price Map by State</h3>
         <p className="text-xs text-slate-500 mb-4">Colored by regular gas price · PADD region borders shown · hover for details · click a state for detail</p>
         <USPriceMap comparisonData={comparisonData ?? []} height={400} onStateClick={(abbr) => navigate(`/state/${abbr}`)} />
@@ -204,12 +294,11 @@ export default function Comparison() {
       {/* PADD Region Cards with state breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {PADD_REGIONS.map(region => {
-          const regionData = comparisonData?.find((d: any) => d.region === region.code);
+          const regionData = comparisonData.find(d => d.region === region.code);
           const price = regionData?.value ?? 0;
           const vsNational = price > 0 && nationalAvg > 0 ? ((price - nationalAvg) / nationalAvg) * 100 : 0;
           const isExpanded = expandedRegions.has(region.code);
-          // State rows from API (only states EIA reports on)
-          const apiStates: any[] = regionData?.states ?? [];
+          const regionStates = regionData?.states ?? [];
 
           return (
             <div key={region.code} className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
@@ -259,25 +348,26 @@ export default function Comparison() {
                 <div className="border-t border-slate-700 px-4 pb-4 pt-3">
                   <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
                     State Prices
-                    {apiStates.length < region.allStates.length && (
-                      <span className="ml-2 font-normal normal-case text-slate-500">
-                        ({apiStates.length} of {region.allStates.length} states reported by EIA)
-                      </span>
-                    )}
+                    <span className="ml-2 font-normal normal-case text-slate-500">
+                      ({regionStates.length} of {region.allStates.length} states)
+                    </span>
                   </div>
 
-                  {apiStates.length > 0 ? (
+                  {regionStates.length > 0 ? (
                     <div className="space-y-1">
-                      {/* States with direct EIA data, sorted high → low */}
-                      {apiStates.map((s: any) => {
+                      {regionStates.map(s => {
                         const vs = nationalAvg > 0 ? ((s.value - nationalAvg) / nationalAvg) * 100 : 0;
                         return (
-                          <div key={s.abbr} className="flex items-center justify-between py-1 border-b border-slate-700/50 last:border-0">
+                          <div
+                            key={s.abbr}
+                            className="flex items-center justify-between py-1 border-b border-slate-700/50 last:border-0 cursor-pointer hover:bg-slate-700/30 rounded px-1 -mx-1 transition-colors"
+                            onClick={() => navigate(`/state/${s.abbr}`)}
+                          >
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="text-xs font-mono bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded w-8 text-center flex-shrink-0">
                                 {s.abbr}
                               </span>
-                              <span className="text-sm text-slate-300 truncate">{s.name}</span>
+                              <span className="text-sm text-slate-300 truncate">{STATE_NAMES[s.abbr] ?? s.name}</span>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                               <span className="text-sm font-semibold text-white">${s.value.toFixed(3)}</span>
@@ -289,24 +379,24 @@ export default function Comparison() {
                         );
                       })}
 
-                      {/* States without direct EIA data */}
+                      {/* States AAA did not report today */}
                       {region.allStates
-                        .filter(s => !apiStates.find((a: any) => a.abbr === s.abbr))
+                        .filter(s => !regionStates.find(r => r.abbr === s.abbr))
                         .map(s => (
-                          <div key={s.abbr} className="flex items-center justify-between py-1 border-b border-slate-700/50 last:border-0 opacity-50">
+                          <div key={s.abbr} className="flex items-center justify-between py-1 border-b border-slate-700/50 last:border-0 opacity-40">
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="text-xs font-mono bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded w-8 text-center flex-shrink-0">
                                 {s.abbr}
                               </span>
                               <span className="text-sm text-slate-400 truncate">{s.name}</span>
                             </div>
-                            <span className="text-xs text-slate-500 flex-shrink-0 ml-2">PADD avg</span>
+                            <span className="text-xs text-slate-500 flex-shrink-0 ml-2">no data</span>
                           </div>
                         ))
                       }
                     </div>
                   ) : (
-                    <p className="text-slate-500 text-sm">No state-level data available — EIA does not report individual states for this region.</p>
+                    <p className="text-slate-500 text-sm">No state-level data available yet.</p>
                   )}
                 </div>
               )}

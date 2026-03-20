@@ -1,0 +1,209 @@
+---
+slug: padd-regions-explained
+title: "PADD Regions Explained: Why Is West Coast Gas More Expensive?"
+description: "The US is divided into five petroleum administration districts. Each region has its own supply chains, regulations, and pricing dynamics."
+publishedAt: "2026-04-08"
+author: FuelRipple
+tags: [PADD, regional, pricing]
+seoKeywords: [PADD regions, why is West Coast gas more expensive, petroleum administration districts]
+canonicalPath: /blog/padd-regions-explained
+readingMinutes: 7
+---
+
+import { ArticleChart, ArticleTable, ArticleCallout } from '../components/ArticleChart';
+
+## Understanding PADD Districts
+
+Why does a gallon of premium unleaded cost $3.50 in Houston but $4.10 in Los Angeles? Why did Midwest refineries in 2022 face shortages while the Gulf had surplus? The answer lies in the **Petroleum Administration for Defense Districts (PADDs)**—five distinct, semi-isolated fuel markets that the U.S. government created in 1942 and which still define how gasoline reaches your tank today.
+
+Understanding PADDs is critical to understanding regional fuel prices, supply constraints, and why a national fuel crisis often masks totally different regional realities.
+
+## What Are PADD Districts?
+
+The PADD system divides the continental U.S. into five regions, each with its own refinery capacity, import/export patterns, and regulatory environment:
+
+| District | Region | Refineries | Key Features |
+|----------|--------|-----------|---------------|
+| **PADD 1** | East Coast (ME → FL) | 2 operating | High reliance on imports; limited refinery capacity |
+| **PADD 2** | Midwest + South (CO → MO → MS) | 15+ operating | Landlocked; feeds via pipeline from Gulf; lower price volatility |
+| **PADD 3** | Gulf Coast (TX, LA) | 30+ refineries | Largest refinery hub; exports globally; lowest prices |
+| **PADD 4** | Rocky Mountain (CO, WY, UT, MT) | 4 operating | Smallest market; highest price volatility; supply isolated |
+| **PADD 5** | West Coast (CA, OR, WA, HI, AK) | 8 operating (CA dominant) | Isolated by geography and specs; highest prices; most regulated |
+
+## The History: Why PADDs Still Matter
+
+The PADD system was created in 1942 during World War II to coordinate fuel rationing and distribution. Refineries were built around PADD hubs—the Gulf Coast with its port access to crude, the Midwest with rail and barge access, California with its own refinery infrastructure.
+
+After the war, the system persisted, not as policy, but as *infrastructure*. Pipelines connect PADD 3 (Gulf) to PADD 2 (Midwest) via Colonial Pipeline and Mid-America Pipe Line. PADD 1 (East Coast) connects via reverse flow on Colonial. But PADD 5 (West Coast) and PADD 4 (Rocky Mountain) remain largely isolated—fuel can't easily move in or out except by truck (expensive) or ship (slow).
+
+This geography creates four distinct fuel markets, not one national market. When a refinery shuts down in the Gulf, Texas prices might dip; when one shuts down in California, LA prices spike 20–40¢ overnight.
+
+## PADD 3: The National Refinery Hub
+
+**Price leadership**: PADD 3 (Gulf Coast) sets national crude oil prices and typically has the lowest gasoline prices.
+
+**Why**: It's home to 30+ refineries (including world's largest at Port Arthur, TX; Corpus Christi, TX; and Beaumont, TX). These refineries:
+- Process 40% of all U.S. crude oil
+- Import crude directly by tanker (cheaper than pipelines)
+- Export refined products globally
+- Benefit from massive scale and competition
+
+<ArticleChart
+  type="bar"
+  title="U.S. Refinery Capacity by PADD District"
+  description="Total operable refining capacity distribution, 2025"
+  data={[
+    { padd: 'PADD 1\n(East)', capacity: 1.1 },
+    { padd: 'PADD 2\n(Midwest)', capacity: 3.2 },
+    { padd: 'PADD 3\n(Gulf)', capacity: 6.5 },
+    { padd: 'PADD 4\n(Rocky Mt)', capacity: 0.8 },
+    { padd: 'PADD 5\n(West)', capacity: 2.1 },
+  ]}
+  xAxisKey="padd"
+  dataKey="capacity"
+  color="#10b981"
+/>
+
+<ArticleCallout 
+  type="tip"
+  title="Why PADD 3 Dominates"
+>
+  PADD 3 (Gulf Coast) has 50% of total U.S. refining capacity. It imports crude by tanker (cheaper than pipelines), exports globally, and benefits from massive scale. One Gulf refinery outage hurts less than one West Coast outage because the region has enormous spare capacity in nearby facilities.
+</ArticleCallout>
+
+**Supply chains**: PADD 3 feeds the entire Midwest (PADD 2) via major pipelines. When PADD 3 refineries are healthy, fuel flows north; margins are tight; prices in the Midwest stay low relative to other regions.
+
+**2022 example**: When Russian crude was embargoed, PADD 3 refineries had to source African and Middle Eastern crude instead. The cost difference was small, so PADD 3 prices actually fell *relative to the world price*—and PADD 2 benefited via the pipeline network.
+
+## PADD 2: The Midwest (PADD 3's Dependent Customer)
+
+**Price impact**: PADD 2 prices typically track PADD 3 closely, with a 2–5¢ premium (for transport and local supply/demand).
+
+**Supply source**: Almost entirely dependent on PADD 3 via pipelines. PADD 2 has 15+ refineries, but they run relatively steady state—they don't have spare capacity to swing supply quickly.
+
+**Volatility**: Lower than PADD 5 and PADD 4 because supply is reliable and plentiful. When crude spikes, Midwest prices spike the same proportion; when crude falls, they fall the same proportion. The "rockets and feathers" effect is less pronounced here because supply doesn't constraint margins.
+
+**Key risk**: Pipeline disruption (rare, but happened during Winter Storm Uri in 2021) can cause sharp spikes lasting days. A hurricane in the Gulf that forces PADD 3 refinery shutdowns will ripple to the Midwest within 1–2 weeks.
+
+## PADD 1: The East Coast (Import-Dependent)
+
+**Price impact**: Highest prices on the U.S. mainland due to import dependence and limited refinery capacity.
+
+**Supply sources**: Only 2 operating refineries (one in Philadelphia, one in New Jersey, both being phased out). The region relies on:
+- Imports via ship (primarily from Caribbean refineries)
+- Reverse-flow on Colonial Pipeline (backup supply from PADD 3)
+- Propane, ethanol blending
+
+**Volatility**: Moderate to high. When import costs rise or Colonial Pipeline is disrupted, PADD 1 prices spike within days. When alternatives are scarce, terminals have pricing power.
+
+**Regulatory premium**: PADD 1 has the strictest environmental fuel specs (RFG—Reformulated Gasoline). Few refineries outside the region produce it, so terminals can charge a premium. This adds 5–15¢/gallon to PADD 1 prices vs. simpler downstream specs.
+
+**2023–2024 shift**: As refineries closed (Philadelphia Energy Solutions in 2019), PADD 1 became more import-dependent, pushing prices higher and volatility higher. A refinery disruption anywhere in the Caribbean now ripples across the East Coast within 2 weeks.
+
+## PADD 4: The Rocky Mountain (Supply Isolated, Price Volatile)
+
+**Price impact**: Highest volatility and frequent price spikes; typically 10–30¢ higher than PADD 3.
+
+**Supply sources**: Only 4 refineries (limited capacity). Supply is isolated:
+- Cannot easily import from PADD 3 (pipelines are at capacity)
+- Cannot easily import from PADD 5 (no pipeline, geography prohibitive)
+- Rail brings some supply, but it's expensive and slow
+
+**Vulnerability**: A single refinery outage can create supply shortages. In 2020, when Tesoro's Mandan, ND refinery shut down temporarily, PADD 4 prices spiked 30¢ within a week. The region couldn't swap in supply from the Gulf because pipeline capacity was full.
+
+**Seasonal stress**: Summer driving season (May–September) is particularly tight. Refineries run at 95%+ capacity; one unplanned outage creates immediate shortages.
+
+**Regulatory burden**: PADD 4 also has tier 2 fuel specs (not as strict as PADD 1, but stricter than PADD 3), limiting where fuel can be sourced. This regulatory gap reduces competition and allows retail margins to widen.
+
+## PADD 5: The West Coast (Isolated, Expensive, Volatile)
+
+**Price impact**: Highest prices and highest volatility. West Coast premiums vs. PADD 3: 30–50¢/gallon during normal times, $1.00–1.50 during supply disruptions.
+
+**Why the isolation?**
+- Geography: California, Oregon, Washington are separated from the rest of the nation by the Rocky Mountains.
+- Pipelines: No major pipeline connects PADD 5 to PADD 2 or PADD 3. Small pipeline from Canada brings ~20% of supply; the rest is produced in-state or imported by ship.
+- No import relief: Unlike PADD 1 (which can import from the Caribbean) or PADD 2 (which can pull from PADD 3), the West Coast cannot easily swap supply. Trucking fuel from Texas costs $0.15–0.20/gallon in transport alone; shipping from Houston takes 3–4 weeks.
+
+**Fuel specs**: California mandates CARBOB (California Reformulated Gasoline)—the world's strictest fuel specification. It reduces smog-forming compounds but also limits refinery capacity (can't blend with standard gasoline). Only 8 U.S. refineries produce CARBOB; none are outside California. If a California refinery shuts down, there's no quick replacement.
+
+<ArticleCallout 
+  type="warning" 
+  title="CARBOB: The Regulatory Constraint"
+>
+  California's CARBOB specification is stricter than federal requirements and cannot be blended with standard gasoline. Only 8 U.S. refineries produce it; all are in California. This means: (1) a California refinery shutdown cannot be solved by importing from other states, and (2) refinery capacity is effectively committed to California demand with no flex to absorb disruptions.
+</ArticleCallout>
+
+**Price spikes: The mechanism**
+
+A typical disruption scenario:
+- One of California's two largest refineries (Chevron Richmond, Shell Martinez) has an unplanned outage.
+- CARBOB supply drops 10–15%.
+- Within 2–3 days, prices spike 20–40¢/gallon.
+- Supply remains tight for 4–6 weeks (refinery restart takes 2–4 weeks, plus inventory rebuilding).
+- Prices stay elevated even as supply is restored because retailers and terminals rebuild margins.
+
+This happened in 2022 (Chevron Richmond outage), 2023 (Shell Martinez), and 2024 (multiple). West Coast consumers paid an extra $2–5 billion annually than they would have under PADD 3 pricing.
+
+**The regulatory trap**: Policymakers want strict fuel specs to reduce smog (a real public health win in Los Angeles). But the consequence is limited refinery capacity and extreme price volatility. Every summer, there's a call to relax specs during disruptions—but this is politically difficult and often happens too late to help.
+
+## Cross-PADD Trade: The Limits
+
+Fuel does cross district boundaries, but slowly and expensively:
+
+- **PADD 3 → PADD 2**: Cheap via Colonial Pipeline (2+ million bbl/day regular flow).
+- **PADD 3 → PADD 1**: Via reverse-flow Colonial (limited; conflicts with PADD 2 demand).
+- **PADD 2 → PADD 5**: Virtually impossible; no pipeline, and transport cost would exceed price difference.
+- **PADD 5 ← imports**: Ship from Asia (1–2 weeks) or truck from Mexico (expensive). During California outages, neither is fast enough.
+
+<ArticleChart
+  type="bar"
+  title="Typical PADD Price Premiums vs. PADD 3 (Gulf Coast)"
+  description="Average diesel/gasoline premium by region, normal market conditions"
+  data={[
+    { padd: 'PADD 2\n(Midwest)', premium: 0.03 },
+    { padd: 'PADD 1\n(East Coast)', premium: 0.18 },
+    { padd: 'PADD 4\n(Rocky Mt)', premium: 0.22 },
+    { padd: 'PADD 5\n(West Coast)', premium: 0.35 },
+  ]}
+  xAxisKey="padd"
+  dataKey="premium"
+  color="#f59e0b"
+/>
+
+<ArticleCallout 
+  type="warning" 
+  title="Premium Volatility"
+>
+  These are average premiums. During supply disruptions, PADD 4 and PADD 5 premiums can jump to $0.50–1.50/gallon within days. PADD 2 premiums rarely exceed $0.08 because pipeline supply is plentiful and reliable.
+</ArticleCallout>
+
+**Result**: Each PADD effectively operates as a separate market. National crude oil price rises, but PADD 5 retailer premiums widen independently based on local supply/demand.
+
+## FuelRipple's district-level data
+
+FuelRipple tracks PADD-level prices and supply metrics because they're the most predictive unit for household cost impact:
+
+- PADD 2 prices are stable and predictable (PADD 3 dependent).
+- PADD 5 prices are volatile and high; disruptions cascade quickly to consumers.
+- PADD 4 prices are volatile and driven by refinery utilization.
+- PADD 1 prices track crude but with import-cost premiums.
+
+When you see your regional price spike, FuelRipple's Supply Health dashboard shows you whether it's a:
+- Crude oil spike (affects all PADDs proportionally)
+- Refinery outage (PADD 5 hits hardest; PADD 2 is buffered)
+- Pipeline disruption (affects PADD 2 and PADD 1; PADD 3 usually unaffected)
+- Seasonal demand (PADD 4 and 5 spike in summer)
+
+## The Bottom Line
+
+The PADD system is 80+ years old, designed for post-war fuel rationing. It persists because pipeline infrastructure is expensive and sticky—once built, it's economically efficient to keep using it. But the consequence is fragmented, regionalized fuel markets:
+
+- **PADD 3 (Gulf)**: Cheap, stable, globally exposed.
+- **PADD 2 (Midwest)**: Moderate prices, stable supply via pipelines.
+- **PADD 1 (East)**: Expensive, import-dependent.
+- **PADD 4 (Rocky Mountain)**: Volatile, isolated, capacity-constrained.
+- **PADD 5 (West)**: Most expensive, most volatile, regulatory constraints.
+
+The next time your state's gas prices jump while the national average is steady, you're seeing PADD dynamics at work. Your regional price isn't determined by the U.S. average—it's determined by what your district's refinery and pipeline network can supply.
+
+

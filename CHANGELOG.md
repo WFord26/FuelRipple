@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.1.0-beta.3] - 2026-03-20
+
 ### Added
 - **Historical fuel prices page overhaul** (`apps/web/src/pages/Historical.tsx`) — complete
   redesign with AAA daily data, all 4 fuel grades, and enhanced Recharts visualization:

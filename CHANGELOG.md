@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.1.5-beta.4] - 2026-03-20
+
 ### Added
 - **Test coverage — `@fuelripple/db` queries** — expanded `packages/db/src/__tests__/queries.test.ts`
   with 38 new tests covering all previously untested query modules:

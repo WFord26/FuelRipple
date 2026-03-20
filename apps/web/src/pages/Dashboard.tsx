@@ -326,11 +326,18 @@ export default function Dashboard() {
 
       {/* Daily US Consumer Spend */}
       {priceChanges && (() => {
+        const aaaGradeKey = fuelType === 'diesel' ? 'diesel' : 'regular';
+        const aaaGrade = aaaChanges?.find(g => g.grade === aaaGradeKey);
+        const displayPrice = aaaGrade?.current_price ?? priceChanges.currentPrice;
+        const priceLabel = aaaGrade?.current_price != null ? 'AAA national avg' : 'latest weekly national avg';
         const gal = priceChanges.dailyGallonsUs;
-        const todayCost  = priceChanges.dailyConsumerCost;
-        const weekCost        = priceChanges.weekAgoPrice       != null ? priceChanges.weekAgoPrice       * gal : null;
-        const monthCost       = priceChanges.monthAgoPrice      != null ? priceChanges.monthAgoPrice      * gal : null;
-        const threeMonthCost  = priceChanges.threeMonthAgoPrice != null ? priceChanges.threeMonthAgoPrice * gal : null;
+        const todayCost  = displayPrice * gal;
+        const weekPrice        = aaaGrade?.week_ago_price       ?? priceChanges.weekAgoPrice;
+        const monthPrice       = aaaGrade?.month_ago_price      ?? priceChanges.monthAgoPrice;
+        const threeMonthPrice  = aaaGrade?.three_month_ago_price ?? priceChanges.threeMonthAgoPrice;
+        const weekCost        = weekPrice       != null ? weekPrice       * gal : null;
+        const monthCost       = monthPrice      != null ? monthPrice      * gal : null;
+        const threeMonthCost  = threeMonthPrice != null ? threeMonthPrice * gal : null;
         const vsWeekDelta       = weekCost       != null ? todayCost - weekCost       : null;
         const vsMonthDelta      = monthCost      != null ? todayCost - monthCost      : null;
         const vsThreeMonthDelta = threeMonthCost != null ? todayCost - threeMonthCost : null;
@@ -358,8 +365,8 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div>
                 <div className="text-xs text-slate-400 mb-1">Price per Gallon</div>
-                <div className="text-2xl font-bold text-white">${priceChanges.currentPrice.toFixed(3)}</div>
-                <div className="text-xs text-slate-500 mt-0.5">latest weekly national avg</div>
+                <div className="text-2xl font-bold text-white">${displayPrice.toFixed(3)}</div>
+                <div className="text-xs text-slate-500 mt-0.5">{priceLabel}</div>
               </div>
               <div>
                 <div className="text-xs text-slate-400 mb-1">Daily Gallons Purchased</div>

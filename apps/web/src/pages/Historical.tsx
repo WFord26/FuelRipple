@@ -182,7 +182,7 @@ export default function Historical() {
     activeFuels.forEach((fuel: FuelGrade) => {
       const values = aaaQuery.data
         .map((d: any) => ({ time: d.time, value: d[fuel] }))
-        .filter((d: any): d is { time: string; value: number } => d.value !== null);
+        .filter((d: any): d is { time: string; value: number } => d.value != null && typeof d.value === 'number');
       
       result[fuel] = calculateStats(values);
     });

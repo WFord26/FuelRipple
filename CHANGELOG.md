@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.1.5-beta.4] - 2026-03-20
+## [1.1.5] - 2026-03-20
+
 
 ### Added
 - **Test coverage — `@fuelripple/db` queries** — expanded `packages/db/src/__tests__/queries.test.ts`
@@ -43,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - API route coverage improvements: `aaa.ts` **17% → 74.5%**, `supply.ts`
     **13% → 82.95%**, overall API statement coverage **37.5% → 53.59%**
   - Total API test count: **51 → 67 tests** across 3 suites (all passing)
+
+---
 
 ---
 

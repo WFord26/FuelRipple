@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.1.0-beta.2] - 2026-03-20
+
 ### Added
 - **AAA-derived PADD regional aggregates** — daily PADD-level gas price data computed
   from existing per-state AAA data, replacing the need for weekly EIA regional series:

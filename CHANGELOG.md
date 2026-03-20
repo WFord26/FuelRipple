@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.6] - 2026-03-20
 
+### Added
+- **Updated SVG assets** — All branding assets refreshed and properly integrated into build:
+  - `favicon.svg` (64×64) — gradient green ripple icon for browser tabs and bookmarks
+  - `icon.svg` (256×256) — high-resolution application icon with multi-color gradients
+  - `logo.svg` (600×160) — horizontal logo with FuelRipple text wordmark
+  - `logo-stacked.svg` (320×360) — vertical stacked logo for hero sections
+  - `logo-stacked-animated.svg` (320×360) — animated version with pulsing ripples, graph animations, and droplet effects
+  - All SVG assets verified in Vite build output and correctly served from `/public/`
+
 ---
 
 ## [1.1.5] - 2026-03-20

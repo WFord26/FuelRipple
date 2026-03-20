@@ -1,0 +1,175 @@
+<svg width="320" height="360" viewBox="0 0 320 360" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .ring-outer {
+        stroke: #00E676;
+        stroke-width: 12;
+        fill: none;
+        transform-origin: 128px 128px;
+        animation: outerPulse 3s ease-in-out infinite;
+      }
+
+      .ring-inner {
+        stroke: #00E676;
+        stroke-width: 10;
+        fill: none;
+        transform-origin: 128px 128px;
+        animation: innerPulse 3s ease-in-out infinite 0.25s;
+      }
+
+      .arc {
+        stroke: #FFB020;
+        stroke-width: 12;
+        fill: none;
+        stroke-linecap: round;
+        stroke-dasharray: 220;
+        stroke-dashoffset: 0;
+        animation: arcGlow 3s ease-in-out infinite;
+      }
+
+      .graph {
+        stroke: #00E676;
+        stroke-width: 8;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 170;
+        stroke-dashoffset: 170;
+        animation: graphDraw 3s ease-in-out infinite;
+      }
+
+      .graph-dot {
+        fill: #00E676;
+        opacity: 0;
+        animation: dotPop 3s ease-in-out infinite;
+      }
+
+      .drop {
+        fill: #00E676;
+        transform-origin: 128px 123px;
+        animation: dropPulse 3s ease-in-out infinite;
+      }
+
+      .title {
+        fill: #E5E7EB;
+        font-family: Inter, Arial, sans-serif;
+        font-size: 36px;
+        letter-spacing: -0.5px;
+      }
+
+      .subtitle {
+        fill: #00E676;
+        font-family: Inter, Arial, sans-serif;
+        font-size: 14px;
+        letter-spacing: 2px;
+      }
+
+      @keyframes outerPulse {
+        0%, 100% {
+          opacity: 0.45;
+          transform: scale(0.96);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.03);
+        }
+      }
+
+      @keyframes innerPulse {
+        0%, 100% {
+          opacity: 0.55;
+          transform: scale(0.98);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.015);
+        }
+      }
+
+      @keyframes arcGlow {
+        0%, 100% {
+          opacity: 0.8;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+
+      @keyframes graphDraw {
+        0% {
+          stroke-dashoffset: 170;
+          opacity: 0.35;
+        }
+        20% {
+          stroke-dashoffset: 170;
+          opacity: 0.35;
+        }
+        55% {
+          stroke-dashoffset: 0;
+          opacity: 1;
+        }
+        100% {
+          stroke-dashoffset: 0;
+          opacity: 1;
+        }
+      }
+
+      @keyframes dotPop {
+        0%, 45% {
+          opacity: 0;
+          r: 0;
+        }
+        55% {
+          opacity: 1;
+          r: 5;
+        }
+        70% {
+          opacity: 1;
+          r: 6.5;
+        }
+        100% {
+          opacity: 1;
+          r: 5;
+        }
+      }
+
+      @keyframes dropPulse {
+        0%, 100% {
+          transform: scale(0.97);
+          opacity: 0.9;
+        }
+        50% {
+          transform: scale(1.05);
+          opacity: 1;
+        }
+      }
+    </style>
+  </defs>
+
+  <!-- ICON -->
+  <g transform="translate(32,20) scale(0.9)">
+    <circle class="ring-outer" cx="128" cy="128" r="90"/>
+    <circle class="ring-inner" cx="128" cy="128" r="65"/>
+
+    <path
+      class="arc"
+      d="M60 140 A68 68 0 0 0 196 140"
+    />
+
+    <polyline
+      class="graph"
+      points="60,140 95,120 120,135 150,105 180,115"
+    />
+
+    <circle class="graph-dot" cx="180" cy="115" r="5"/>
+
+    <path
+      class="drop"
+      d="M128 150 C128 130 150 120 128 95 C106 120 128 130 128 150Z"
+    />
+  </g>
+
+  <!-- TEXT -->
+  <text x="160" y="260" text-anchor="middle" class="title">FuelRipple</text>
+  <text x="160" y="300" text-anchor="middle" class="subtitle">CONSUMER DISRUPTION INDEX</text>
+</svg>

@@ -1,0 +1,36 @@
+<svg width="320" height="360" viewBox="0 0 320 360" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- ICON -->
+  <g transform="translate(32,20) scale(0.9)">
+    <circle cx="128" cy="128" r="90" stroke="#00E676" stroke-width="12" fill="none"/>
+    <circle cx="128" cy="128" r="65" stroke="#00E676" stroke-width="10" fill="none"/>
+    <path d="M60 140 A68 68 0 0 0 196 140"
+          stroke="#FFB020" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <polyline points="60,140 95,120 120,135 150,105 180,115"
+              stroke="#00E676" stroke-width="8"
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"/>
+    <path d="M128 150 C128 130 150 120 128 95 C106 120 128 130 128 150Z"
+          fill="#00E676"/>
+  </g>
+
+  <!-- TEXT -->
+  <text x="160" y="260"
+        text-anchor="middle"
+        font-family="Inter, sans-serif"
+        font-size="36"
+        fill="#E5E7EB">
+    FuelRipple
+  </text>
+
+  <text x="160" y="300"
+        text-anchor="middle"
+        font-family="Inter, sans-serif"
+        font-size="14"
+        fill="#00E676"
+        letter-spacing="2">
+    CONSUMER DISRUPTION INDEX
+  </text>
+
+</svg>

@@ -11,11 +11,30 @@ const l1Cache = new LRUCache<string, any>({
 });
 
 /**
+ * When connecting through an Azure private link endpoint the DNS name
+ * contains ".privatelink." but the TLS cert's SANs only cover the public
+ * hostname (e.g. frredis.westus3.redis.azure.net).  Override servername so
+ * Node's TLS stack validates against the cert-covered hostname.
+ */
+function privateLinkTlsServername(url: string): string | null {
+  try {
+    const { hostname } = new URL(url);
+    if (hostname.includes('.privatelink.')) {
+      return hostname.replace('.privatelink.', '.');
+    }
+  } catch {
+    // malformed URL — let ioredis surface the error
+  }
+  return null;
+}
+
+/**
  * Initialize Redis connection for L2 cache
  */
 export function initializeCache() {
   if (process.env.REDIS_URL) {
-    redis = new Redis(process.env.REDIS_URL);
+    const servername = privateLinkTlsServername(process.env.REDIS_URL);
+    redis = new Redis(process.env.REDIS_URL, servername ? { tls: { servername } } : {});
     redis.on('connect', () => {
       console.log('✅ Redis L2 cache connected');
     });

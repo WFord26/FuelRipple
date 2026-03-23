@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Metro gas price heatmap** (`apps/web/src/components/MetroHeatmap.tsx`) — new component rendering per-state price maps:
+  - Loads US TopoJSON atlas (`/public/states-10m.json`) and projects the requested state outline using `d3-geo` `geoAlbersUsa().fitSize()`
+  - Metro circles plotted via the same `geoAlbersUsa` projection so dots land on actual city coordinates
+  - Blue (cheap) → red (expensive) HSL color scale with gradient legend and min/max price labels
+  - Hover tooltip displaying metro name and price
+  - Scrollable metro list sorted by price with color-coded swatches
+  - `<ErrorBoundary>` wrapped and lazy-loaded from `State.tsx`
+- **AAA metro CSV scraper** (`apps/api/src/services/aaaMetroClient.ts`) — replaced 474-request individual scraper with single CSV fetch:
+  - `fetchMetroPricesFromCSV()` downloads the GitHub-hosted daily averages CSV in one request (~3 seconds vs. 5+ minutes)
+  - `fetchAllMetroPricesFallback()` preserves original per-metro AAA scraping logic
+  - 474 US metro areas populated into `aaa_metro_aggregates` hypertable
+- **Accurate metro coordinates** (`apps/api/src/services/aaaMetroClient.ts`):
+  - Replaced the old key-mismatched `METRO_COORDINATES` dict with `PRIMARY_CITY_COORDS` — ~350 entries keyed by `"PrimaryCity StateAbbr"` (e.g. `"Los Angeles CA"`)
+  - `extractPrimaryCity()` strips state suffix, qualifier tokens like `(AR only)`, and takes the first city segment before any hyphen, enabling reliable lookup against CSV-generated metro names
+  - `STATE_CENTERS` fallback with ±2° jitter retained for any unmatched metros
+  - Re-ran scraper to upsert all 474 metros with corrected lat/lng values
+
+### Changed
+- `apps/web/src/pages/State.tsx` — passes `stateAbbr` prop to `<MetroHeatmap>`
+- `apps/web/package.json` — added `d3-geo@^3.1.1` and `@types/d3-geo`
+
 ---
 
 ## [1.1.6] - 2026-03-20

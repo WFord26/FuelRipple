@@ -1,6 +1,14 @@
 User-agent: *
 Allow: /
 
+# Specify sitemap location
+Sitemap: https://fuelripple.com/sitemap.xml
+
+# If your host supports it, include the preferred host
+Host: https://fuelripple.com
+User-agent: *
+Allow: /
+
 # Block API endpoints from indexing
 Disallow: /api/
 Disallow: /embed/

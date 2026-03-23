@@ -21,7 +21,7 @@
     <meta property="og:site_name" content="FuelRipple" />
     <meta property="og:title" content="FuelRipple — US Gas Price Tracker &amp; Consumer Disruption Index" />
     <meta property="og:description" content="Track US gasoline prices across all PADD regions. Consumer Disruption Index, refinery supply health, crude oil lag analysis, and more." />
-    <meta property="og:image" content="/og-image.svg" />
+    <meta property="og:image" content="https://fuelripple.com/og-image.svg" />
     <meta property="og:url" content="https://fuelripple.com" />
 
     <!-- Twitter card -->
@@ -29,7 +29,7 @@
     <meta name="twitter:site" content="@FuelRipple" />
     <meta name="twitter:title" content="FuelRipple — US Gas Price Tracker &amp; Consumer Disruption Index" />
     <meta name="twitter:description" content="Track US gasoline prices across all PADD regions. Consumer Disruption Index, refinery supply health, crude oil lag analysis." />
-    <meta name="twitter:image" content="/og-image.svg" />
+    <meta name="twitter:image" content="https://fuelripple.com/og-image.svg" />
 
     <!-- Canonical (overridden per-route by usePageSEO hook) -->
     <link rel="canonical" href="https://fuelripple.com" />
@@ -47,6 +47,25 @@
         "target": "https://fuelripple.com/comparison?region={search_term_string}",
         "query-input": "required name=search_term_string"
       }
+    }
+    </script>
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "FuelRipple",
+      "url": "https://fuelripple.com",
+      "logo": "https://fuelripple.com/og-image.svg",
+      "sameAs": [
+        "https://twitter.com/FuelRipple"
+      ],
+      "contactPoint": [{
+        "@type": "ContactPoint",
+        "contactType": "customer service",
+        "email": "info@fuelripple.com",
+        "availableLanguage": "en"
+      }]
     }
     </script>
   </head>

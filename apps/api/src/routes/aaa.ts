@@ -9,6 +9,7 @@ import {
   getAaaPaddLatest,
   getAaaPaddHistory,
   getAllAaaPaddLatest,
+  getMetroAggregatesLatestByState,
 } from '@fuelripple/db';
 import { cacheOrFetch } from '../services/cache';
 import { CACHE_TTL, PADD_REGIONS } from '@fuelripple/shared';
@@ -325,6 +326,39 @@ router.get('/region/:padd', async (req: Request, res: Response, next: NextFuncti
       status: 'success',
       padd,
       name: PADD_NAMES[padd],
+      data,
+      count: data.length,
+      source: 'aaa',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/aaa/metros/:stateAbbr/latest
+ * Latest AAA metro prices for a given state.
+ * Returns array of metros with lat/lng for heatmap visualization.
+ *
+ * :stateAbbr — Two-letter state abbreviation (CA, NY, TX, etc.)
+ */
+router.get('/metros/:stateAbbr/latest', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { stateAbbr } = req.params;
+    if (!stateAbbr || stateAbbr.length !== 2) {
+      res.status(400).json({ status: 'error', message: 'Invalid state abbreviation' });
+      return;
+    }
+
+    const data = await cacheOrFetch(
+      `aaa:metros:${stateAbbr.toUpperCase()}:latest`,
+      () => getMetroAggregatesLatestByState(stateAbbr),
+      CACHE_TTL.AAA_NATIONAL
+    );
+
+    res.json({
+      status: 'success',
+      state: stateAbbr.toUpperCase(),
       data,
       count: data.length,
       source: 'aaa',

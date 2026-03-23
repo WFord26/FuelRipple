@@ -342,3 +342,88 @@ export async function getAllAaaPaddLatest(): Promise<AaaPaddAggregateRow[]> {
     ORDER BY padd, time DESC
   `).then((r: any) => r.rows as AaaPaddAggregateRow[]);
 }
+
+/**
+ * Row type for AAA metro-level price aggregates
+ */
+export interface AaaMetroAggregateRow {
+  time: Date;
+  metro_id: string;
+  metro_name: string;
+  state_abbr: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  regular: number | null;
+  mid_grade: number | null;
+  premium: number | null;
+  diesel: number | null;
+}
+
+/**
+ * Upsert metro-level AAA price aggregates for heatmaps and detailed maps.
+ */
+export async function upsertMetroAggregates(
+  rows: AaaMetroAggregateRow[]
+): Promise<void> {
+  if (rows.length === 0) return;
+  const knex = getKnex();
+
+  const sorted = [...rows].sort(
+    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+  );
+  const CHUNK = 100;
+
+  for (let i = 0; i < sorted.length; i += CHUNK) {
+    const chunk = sorted.slice(i, i + CHUNK);
+    await knex('aaa_metro_aggregates')
+      .insert(chunk)
+      .onConflict(['time', 'metro_id'])
+      .merge(['regular', 'mid_grade', 'premium', 'diesel', 'latitude', 'longitude']);
+  }
+}
+
+/**
+ * Get metro aggregates for a specific state and date.
+ */
+export async function getMetroAggregatesForState(
+  stateAbbr: string,
+  date: Date
+): Promise<AaaMetroAggregateRow[]> {
+  const knex = getKnex();
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+
+  return knex('aaa_metro_aggregates')
+    .where('state_abbr', stateAbbr.toUpperCase())
+    .andWhere('time', '>=', dayStart)
+    .andWhere('time', '<', dayEnd)
+    .select<AaaMetroAggregateRow[]>('*')
+    .orderBy('metro_name', 'asc');
+}
+
+/**
+ * Get the most recent metro aggregates for a given state.
+ * Used for state detail map heatmap.
+ */
+export async function getMetroAggregatesLatestByState(
+  stateAbbr: string
+): Promise<AaaMetroAggregateRow[]> {
+  const knex = getKnex();
+  
+  // Get the most recent date for this state
+  const latest = await knex('aaa_metro_aggregates')
+    .where('state_abbr', stateAbbr.toUpperCase())
+    .orderBy('time', 'desc')
+    .select('time')
+    .first();
+
+  if (!latest) return [];
+
+  return knex('aaa_metro_aggregates')
+    .where('state_abbr', stateAbbr.toUpperCase())
+    .where('time', latest.time)
+    .select<AaaMetroAggregateRow[]>('*')
+    .orderBy('metro_name', 'asc');
+}

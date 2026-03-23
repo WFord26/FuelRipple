@@ -395,3 +395,24 @@ export const getAaaPaddHistory = async (
   const response = await apiClient.get(`/aaa/region/${padd}`, { params: { limit } });
   return response.data.data;
 };
+
+// ── AAA Metro Area Prices ──────────────────────────────────────────────────
+
+export interface AaaMetroAggregate {
+  time: string;
+  metro_id: string;
+  metro_name: string;
+  state_abbr: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  regular: number | null;
+  mid_grade: number | null;
+  premium: number | null;
+  diesel: number | null;
+}
+
+/** Latest AAA metro prices for a given state (all metros with current prices) */
+export const getAaaMetrosLatest = async (stateAbbr: string): Promise<AaaMetroAggregate[]> => {
+  const response = await apiClient.get(`/aaa/metros/${stateAbbr}/latest`);
+  return response.data.data;
+};

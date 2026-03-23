@@ -8,8 +8,10 @@ import {
   getAaaNationalLatest,
   getStatePrice,
   getTypicalImpact,
+  getAaaMetrosLatest,
 } from '../api/client';
 import { PriceChart } from '../components/PriceChart';
+import { MetroHeatmap } from '../components/MetroHeatmap';
 import { usePageSEO } from '../hooks/usePageSEO';
 
 // ── State → EIA duoarea code mapping ─────────────────────────────────────────
@@ -123,6 +125,13 @@ export default function State() {
     queryKey: ['stateImpact', padd?.code],
     queryFn: () => getTypicalImpact(padd?.code || 'NUS'),
     enabled: !!padd,
+  });
+
+  // Metro-level data for heatmap
+  const { data: metros, isLoading: metrosLoading } = useQuery({
+    queryKey: ['metrosLatest', abbr],
+    queryFn: () => getAaaMetrosLatest(abbr),
+    enabled: !!stateName,
   });
 
   // Extract all prices from AAA data
@@ -248,6 +257,46 @@ export default function State() {
           <p className="text-slate-400">No current price data available for {stateName}</p>
         </div>
       )}
+
+      {/* Metro Heatmap */}
+      {metros && metros.length > 0 ? (
+        <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-white">Regional Prices by Metro</h3>
+            <div className="flex items-center bg-slate-700 rounded-lg border border-slate-600 p-1">
+              <button
+                onClick={() => setChartFuelType('gas_regular')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                  chartFuelType === 'gas_regular'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                ⛽ Regular Gas
+              </button>
+              <button
+                onClick={() => setChartFuelType('diesel')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                  chartFuelType === 'diesel'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                🛢️ Diesel
+              </button>
+            </div>
+          </div>
+          {metrosLoading ? (
+            <div className="text-center py-8 text-slate-400">Loading metro prices...</div>
+          ) : (
+            <MetroHeatmap
+              metros={metros}
+              fuelType={chartFuelType === 'gas_regular' ? 'regular' : 'diesel'}
+              stateAbbr={abbr}
+            />
+          )}
+        </div>
+      ) : null}
 
       {/* Price Changes — Chart Fuel Type */}
       {/* Price History by Grade — all grades × all time periods */}

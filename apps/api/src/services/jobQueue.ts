@@ -28,12 +28,13 @@ export function initializeJobQueue(): void {
     host: redis.options.host,
     port: redis.options.port,
     maxRetriesPerRequest: null, // required by BullMQ
+    enableReadyCheck: false,    // required for Azure Redis Cluster
   };
   if (redis.options.password) bullmqConnOpts.password = redis.options.password;
   if (redis.options.username) bullmqConnOpts.username = redis.options.username;
   if (redis.options.tls) bullmqConnOpts.tls = redis.options.tls;
 
-  dataQueue = new Queue('data-ingestion', { connection: bullmqConnOpts });
+  dataQueue = new Queue('data-ingestion', { connection: bullmqConnOpts, prefix: '{bull}' });
 
   console.log('✅ Job queue initialized');
 
@@ -239,6 +240,7 @@ function createWorkers(): void {
     },
     {
       connection: bullmqConnOpts!,
+      prefix: '{bull}',
       concurrency: 3,
       maxStalledCount: 3,
       stalledInterval: 60000,

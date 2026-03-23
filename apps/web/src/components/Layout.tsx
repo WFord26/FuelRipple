@@ -112,7 +112,7 @@ export default function Layout() {
             <div className="flex flex-col items-center sm:items-start">
               <img 
                 src="/logo-stacked-animated.svg" 
-                alt="FuelRipple" 
+                alt="FuelRipple Stacked Logo" 
                 className="w-40 h-52 mb-3"
               />
               <p className="mt-1 text-slate-500 text-center sm:text-left">

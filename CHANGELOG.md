@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.1.7] - 2026-03-23
+
 ### Added
 - **Metro gas price heatmap** (`apps/web/src/components/MetroHeatmap.tsx`) — new component rendering per-state price maps:
   - Loads US TopoJSON atlas (`/public/states-10m.json`) and projects the requested state outline using `d3-geo` `geoAlbersUsa().fitSize()`

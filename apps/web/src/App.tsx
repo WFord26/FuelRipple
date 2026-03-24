@@ -18,6 +18,7 @@ const DataStatus   = lazy(() => import('./pages/DataStatus'));
 const Methodology  = lazy(() => import('./pages/Methodology'));
 const Blog       = lazy(() => import('./pages/Blog'));
 const BlogPost   = lazy(() => import('./pages/BlogPost'));
+const EmbedWidget = lazy(() => import('./pages/EmbedWidget'));
 
 // ── Shared loading skeleton ──────────────────────────────────────────────────
 function PageSkeleton() {
@@ -41,6 +42,18 @@ function App() {
   return (
     <ErrorBoundary section="Application">
       <Routes>
+        {/* Embed routes — no Layout wrapper, minimal iframe-ready pages */}
+        <Route
+          path="/embed/:widgetType"
+          element={
+            <ErrorBoundary section="Embed Widget" inline={false}>
+              <Suspense fallback={<div className="bg-slate-950 w-full h-screen" />}>
+                <EmbedWidget />
+              </Suspense>
+            </ErrorBoundary>
+          }
+        />
+
         <Route path="/" element={<Layout />}>
           <Route index element={
             <ErrorBoundary section="Dashboard" inline={false}>

@@ -140,6 +140,10 @@ resource apiApp 'Microsoft.Web/sites@2023-01-01' = {
           value: environment
         }
         {
+          name: 'AAA_INTRADAY_ENABLED'
+          value: 'true'
+        }
+        {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: appInsightsConnectionString
         }

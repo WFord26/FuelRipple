@@ -8,6 +8,7 @@ import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData,
 import type { RefineryOperationsRow, CapacityRow, AaaNationalAverageRow, AaaStateAggregateRow, AaaPaddAggregateRow, PriceChangesRow } from '@fuelripple/db';
 import { EnergyPrice, EconomicIndicator, PADD_REGIONS, STATE_POPULATIONS } from '@fuelripple/shared';
 import { abbrToDuoarea } from '../utils/regionMapper';
+import { trackApiException } from '../lib/appInsights';
 
 export let dataQueue: Queue | null = null;
 let bullmqConnOpts: Record<string, any> | null = null;
@@ -235,6 +236,11 @@ function createWorkers(): void {
         return { success: true, timestamp: new Date().toISOString() };
       } catch (error) {
         console.error(`Job ${job.name} failed:`, error);
+        const normalizedError =
+          error instanceof Error
+            ? error
+            : new Error(typeof error === 'string' ? error : 'Unknown job error');
+        trackApiException(normalizedError, { jobName: job.name, jobId: job.id ?? 'unknown' });
         throw error;
       }
     },
@@ -253,6 +259,11 @@ function createWorkers(): void {
 
   worker.on('failed', (job, err) => {
     console.error(`❌ Job ${job?.name} failed:`, err);
+    trackApiException(err, { 
+      jobName: job?.name ?? 'unknown', 
+      jobId: job?.id ?? 'unknown',
+      attemptsMade: job?.attemptsMade?.toString() ?? 'unknown'
+    });
   });
 
   console.log('✅ Worker started');

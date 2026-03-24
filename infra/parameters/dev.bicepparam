@@ -9,6 +9,10 @@ param appServiceSkuName = 'B1'
 param enableRedis = false
 param enableFrontDoor = true
 
+// Alert notifications
+param alertEmails = readEnvironmentVariable('ALERT_EMAILS', '')
+param webhookUrl = readEnvironmentVariable('ALERT_WEBHOOK_URL', '')
+
 // Secrets — supply at deployment time via --parameters or key vault
 param dbPassword = readEnvironmentVariable('DB_PASSWORD', '')
 param eiaApiKey = readEnvironmentVariable('EIA_API_KEY', '')

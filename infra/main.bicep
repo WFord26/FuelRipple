@@ -42,6 +42,12 @@ param enableRedis bool = false
 @description('Deploy Azure Front Door Standard for CDN, DDoS protection, and global edge caching.')
 param enableFrontDoor bool = false
 
+@description('Email address(es) for alert notifications (comma-separated)')
+param alertEmails string = ''
+
+@description('Optional webhook URL for alert notifications (e.g., Slack, Teams, Discord)')
+param webhookUrl string = ''
+
 // Naming convention
 var suffix = '${projectName}-${environment}'
 var acrName = replace('acr${projectName}${environment}', '-', '')
@@ -79,6 +85,18 @@ module monitoring 'modules/app-insights.bicep' = {
   params: {
     suffix: suffix
     location: location
+  }
+}
+
+// Azure Monitor: Alert Rules & Action Groups
+module alerts 'modules/alerts.bicep' = if (alertEmails != '') {
+  name: 'alerts'
+  params: {
+    suffix: suffix
+    location: location
+    alertEmails: alertEmails
+    appInsightsResourceId: monitoring.outputs.resourceId
+    webhookUrl: webhookUrl
   }
 }
 

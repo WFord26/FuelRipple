@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Social share buttons** (`apps/web/src/components/ShareButtons.tsx`) — reusable component for sharing pages across social platforms:
+  - X/Twitter, Facebook, and LinkedIn share links pre-populated with page title and URL
+  - Copy-link button with clipboard API and "Copied!" confirmation feedback
+  - Web Share API button (shown only on devices where `navigator.share` is available)
+  - `compact` prop renders icon-only mode for space-constrained contexts
+  - Placed in blog post article footer and Dashboard page header
+- **Embeddable iframe widgets** — three self-contained widgets at `/embed/:widgetType`:
+  - `price-ticker` — current US national average gas price for any fuel grade with as-of date
+  - `disruption-score` — live disruption index (0–5) rendered as a color-coded circle badge
+  - `price-trend` — 30-day mini trend chart with latest price and % change, built with inline SVG (no additional chart library)
+  - All widgets include a "Powered by FuelRipple" attribution link
+  - Route added outside the main `Layout` wrapper so pages render cleanly as iframes
+- **Embed code generator** (`apps/web/src/components/EmbedCodeGenerator.tsx`) — interactive tool on the Dashboard:
+  - Widget type selector with descriptions and recommended dimensions
+  - Fuel grade selector (shown only for grade-aware widgets)
+  - Live preview iframe rendering the actual widget
+  - Auto-generated `<iframe>` HTML snippet with one-click copy
+  - Placed at the bottom of the Dashboard page
+
+### Changed
+
+- `apps/web/src/App.tsx` — added `/embed/:widgetType` route outside the `Layout` wrapper (no nav/header/footer)
+- `apps/web/src/pages/BlogPost.tsx` — added `ShareButtons` above the article footer callout
+- `apps/web/src/pages/Dashboard.tsx` — added `ShareButtons` to page header and `EmbedCodeGenerator` at bottom of page
+
 ---
 
 ## [1.1.7] - 2026-03-23

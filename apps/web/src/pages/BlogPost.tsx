@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { MDXProvider } from '@mdx-js/react';
 import { usePageSEO } from '../hooks/usePageSEO';
 import { mdxComponents } from '../content/components';
+import ShareButtons from '../components/ShareButtons';
 import type { BlogPostMeta } from '@fuelripple/shared';
 
 type PostModule = { default: React.ComponentType; frontmatter: BlogPostMeta };
@@ -168,7 +169,12 @@ export default function BlogPost() {
       </div>
 
       {/* Article Footer */}
-      <footer className="mt-12 pt-8 border-t border-slate-700">
+      <footer className="mt-12 pt-8 border-t border-slate-700 space-y-6">
+        <ShareButtons
+          title={meta.title}
+          description={meta.description}
+          url={`https://fuelripple.com/blog/${slug}`}
+        />
         <div className="bg-slate-900 p-6 rounded-lg">
           <p className="text-slate-300">
             Questions or feedback? Use FuelRipple's interactive dashboard to explore price trends,

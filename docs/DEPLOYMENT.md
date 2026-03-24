@@ -406,6 +406,90 @@ Invoke-RestMethod -Uri https://app-api-fuelripple-dev.azurewebsites.net/health
 (Invoke-WebRequest -Uri https://app-web-fuelripple-dev.azurewebsites.net/ -Method Head).StatusCode
 ```
 
+### Alert Notifications
+
+FuelRipple includes Azure Monitor alerts that automatically notify you when:
+- **Job failures**: Data ingestion jobs (EIA, FRED, AAA) fail
+- **API errors**: Server returns excessive 5xx errors
+- **App downtime**: API stops responding
+
+#### Configure Alert Notifications
+
+1. **Set alert email addresses** in your `.env` or deployment parameters:
+   ```bash
+   # Single email
+   ALERT_EMAILS=your-email@example.com
+   
+   # Multiple emails (comma-separated)
+   ALERT_EMAILS=admin@example.com,devops@example.com,monitoring@example.com
+   ```
+
+2. **(Optional) Set webhook URL** for Slack, Teams, or Discord:
+   ```bash
+   # Slack incoming webhook
+   ALERT_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+   
+   # Microsoft Teams webhook
+   ALERT_WEBHOOK_URL=https://outlook.office.com/webhook/YOUR/WEBHOOK/URL
+   
+   # Discord webhook
+   ALERT_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR/WEBHOOK/URL
+   ```
+
+3. **Deploy or update infrastructure**:
+   ```bash
+   # PowerShell
+   $env:ALERT_EMAILS = "your-email@example.com"
+   # IMPORTANT: Replace the placeholder email above with your real, monitored alert email address before deploying.
+   $env:ALERT_WEBHOOK_URL = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+   az deployment group create `
+     --resource-group rg-fuelripple-dev `
+     --template-file infra/main.bicep `
+     --parameters infra/parameters/dev.bicepparam
+   ```
+
+#### Alert Types & Severity
+
+| Alert | Severity | Trigger Condition | Evaluation Window |
+|-------|----------|-------------------|-------------------|
+| **Job Failures** | Warning (2) | 1+ job exceptions tracked | 15 minutes |
+| **API Errors** | Error (1) | 10+ failed requests (5xx) | 15 minutes |
+| **App Down** | Critical (0) | No requests received | 15 minutes |
+
+#### View Alert History
+
+**Azure Portal**:
+1. Navigate to your Application Insights resource: `appi-fuelripple-dev`
+2. Select **Alerts** → **Alert rules** to see configured rules
+3. Select **Alerts** → **Alert history** to view triggered alerts
+
+**PowerShell**:
+```powershell
+# List all alert rules
+az monitor metrics alert list --resource-group rg-fuelripple-dev
+
+# View recent alerts
+az monitor metrics alert show --resource-group rg-fuelripple-dev --name alert-job-failures-fuelripple-dev
+```
+
+#### Customize Alert Thresholds
+
+Edit [infra/modules/alerts.bicep](../infra/modules/alerts.bicep) to adjust:
+- **Thresholds**: Change `threshold` values (e.g., increase API error threshold from 10 to 50)
+- **Time windows**: Adjust `evaluationFrequency` and `windowSize`
+- **Severity levels**: Modify `severity` (0=Critical, 1=Error, 2=Warning, 3=Info)
+
+After changes, redeploy infrastructure.
+
+#### Disable Alerts
+
+To disable alert notifications for an environment, set `alertEmails` to an empty string in your `.bicepparam` file:
+```bicep
+param alertEmails = ''
+```
+
+This will skip alert rule creation entirely.
+
 ### Common Issues
 
 | Issue | Solution |

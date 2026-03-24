@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"navigator\\\\|window.open\\\\|share.*api\\\\|fetch.*share\" './apps/web/src' --include=*.tsx --include=*.ts)"
+    ]
+  }
+}

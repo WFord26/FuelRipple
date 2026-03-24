@@ -4,6 +4,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { getCurrentPrices, getDisruptionScore, getTypicalImpact, getRegionalComparison, getPriceChanges, getSupplyHealth, getDownstreamImpact, getVolatility, getEvents, getSupplyInventories, getCurrentCrudePrice, getSeasonalComparison, getAaaNationalChanges } from '../api/client';
 import DisruptionMeter from '../components/DisruptionMeter';
 import USPriceMap from '../components/USPriceMap';
+import ShareButtons from '../components/ShareButtons';
+import EmbedCodeGenerator from '../components/EmbedCodeGenerator';
 import { usePageSEO } from '../hooks/usePageSEO';
 
 const SUPPLY_CLR: Record<string, string> = {
@@ -129,10 +131,25 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">Price Overview</h2>
-          <p className="text-slate-400">Current US {fuelLabel.toLowerCase()} prices and consumer impact</p>
+          <h2
+            id="price-overview-heading"
+            className="text-3xl font-bold text-white mb-2"
+          >
+            Price Overview
+          </h2>
+          <p className="text-slate-400 mb-3">Current US {fuelLabel.toLowerCase()} prices and consumer impact</p>
+          <div
+            className="mt-1"
+            aria-label="Share this dashboard"
+            aria-describedby="price-overview-heading"
+          >
+            <ShareButtons
+              title="FuelRipple — Live US Gas Price Dashboard"
+              description="Track live US gasoline prices, disruption scores, and supply health."
+            />
+          </div>
         </div>
         {/* Fuel type toggle */}
         <div className="flex items-center bg-slate-800 rounded-lg border border-slate-700 p-1">
@@ -612,6 +629,9 @@ export default function Dashboard() {
           </p>
         </div>
       </div>
+
+      {/* Embed widgets */}
+      <EmbedCodeGenerator />
     </div>
   );
 }

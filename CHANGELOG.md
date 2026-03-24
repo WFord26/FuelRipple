@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Server-side cache warming** (`apps/api/src/services/cacheWarmer.ts`) — pre-populates Redis and L1 cache on server startup to eliminate first-visitor latency after cold starts or deploys:
+  - Fires 19 parallel `fetch` requests to all dashboard endpoints for both `gas_regular` and `diesel` fuel types immediately after the server starts listening
+  - Uses `Promise.allSettled` so a single slow endpoint (e.g. supply health z-score calculation) does not block the rest
+  - Logs warm results (`✅ Cache warm: N/19 endpoints ready`) and warns on individual failures without crashing the server
+  - Runs entirely in the background — does not delay the server accepting user requests
+
+### Changed
+
+- **Dashboard progressive rendering** (`apps/web/src/pages/Dashboard.tsx`) — the full-page "Loading dashboard..." spinner now only blocks on `currentPrices` instead of waiting for `disruptionScore` and `typicalImpact` as well; disruption and impact sections render their own inline "Loading…" placeholders while data arrives
+- **Dashboard query stale times** (`apps/web/src/pages/Dashboard.tsx`) — added `staleTime: 60 * 60 * 1000` (1 hour) to `currentPrices`, `priceChanges`, `priceComparison`, `disruptionScore`, and `typicalImpact` queries; previously these had no stale time (default = 0), causing a full 13-request refetch cascade on every browser tab focus
+
 ---
 
 ## [1.1.8] - 2026-03-24

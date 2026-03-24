@@ -26,6 +26,7 @@ import healthRouter from './routes/health';
 import { errorHandler } from './middleware/errorHandler';
 import { initializeCache } from './services/cache';
 import { initializeJobQueue } from './services/jobQueue';
+import { warmDashboardCache } from './services/cacheWarmer';
 
 const app: Application = express();
 const PORT = process.env.PORT || 3001;
@@ -114,6 +115,11 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`🌐 CORS origins: ${allowedOrigins.join(', ')}`);
     console.log(`🗄️  Database: ${process.env.DATABASE_URL ? 'configured' : '⚠️  NOT SET'}`);
     console.log(`📦 Redis: ${process.env.REDIS_URL ? 'configured' : 'not configured (L1 only)'}`);
+
+    // Pre-populate cache in background — don't await, don't block incoming requests
+    warmDashboardCache(PORT).catch((err) =>
+      console.warn('⚠️  Cache warm error:', err.message)
+    );
   });
 }
 

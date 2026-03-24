@@ -49,26 +49,31 @@ export default function Dashboard() {
   const { isLoading: pricesLoading } = useQuery({
     queryKey: ['currentPrices', fuelType],
     queryFn: () => getCurrentPrices(fuelType),
+    staleTime: 60 * 60 * 1000,
   });
 
   const { data: priceChanges } = useQuery({
     queryKey: ['priceChanges', fuelType],
     queryFn: () => getPriceChanges(fuelType, fuelType === 'diesel' ? 'US' : 'NUS'),
+    staleTime: 60 * 60 * 1000,
   });
 
   const { data: comparisonData } = useQuery({
     queryKey: ['priceComparison', fuelType],
     queryFn: () => getRegionalComparison(fuelType),
+    staleTime: 60 * 60 * 1000,
   });
 
-  const { data: disruption, isLoading: disruptionLoading } = useQuery({
+  const { data: disruption } = useQuery({
     queryKey: ['disruptionScore', fuelType],
     queryFn: () => getDisruptionScore(fuelType),
+    staleTime: 60 * 60 * 1000,
   });
 
-  const { data: impact, isLoading: impactLoading } = useQuery({
+  const { data: impact } = useQuery({
     queryKey: ['typicalImpact'],
     queryFn: () => getTypicalImpact(),
+    staleTime: 60 * 60 * 1000,
   });
 
   const { data: supplyHealth } = useQuery({
@@ -121,7 +126,7 @@ export default function Dashboard() {
     staleTime: 24 * 60 * 60 * 1000,
   });
 
-  if (pricesLoading || disruptionLoading || impactLoading) {
+  if (pricesLoading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-slate-400">Loading dashboard...</div>

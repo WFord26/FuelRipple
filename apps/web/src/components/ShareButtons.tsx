@@ -18,7 +18,7 @@ export default function ShareButtons({ url, title, description, compact = false 
   const encodedUrl = encodeURIComponent(shareUrl);
   const encodedTitle = encodeURIComponent(title);
 
-  const twitterHref = `https://twitter.com/intent/tweet?text=${encodedTitle}&url=${encodedUrl}&via=FuelRipple`;
+  const twitterHref = `https://x.com/intent/post?text=${encodedTitle}&url=${encodedUrl}&via=FuelRipple`;
   const facebookHref = `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
   const linkedinHref = `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`;
 

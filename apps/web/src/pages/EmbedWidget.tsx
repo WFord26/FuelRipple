@@ -60,7 +60,6 @@ function Sparkline({ values, width = 220, height = 48 }: { values: number[]; wid
   const trendUp = latest > oldest;
 
   const lineColor = trendUp ? '#f97316' : '#22c55e';
-  const fillColor = trendUp ? 'rgba(249,115,22,0.12)' : 'rgba(34,197,94,0.12)';
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} className="overflow-visible">

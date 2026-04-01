@@ -1,12 +1,12 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { getCurrentPrices, getDisruptionScore, getTypicalImpact, getRegionalComparison, getPriceChanges, getSupplyHealth, getDownstreamImpact, getVolatility, getEvents, getSupplyInventories, getCurrentCrudePrice, getSeasonalComparison, getAaaNationalChanges } from '../api/client';
+import { getCurrentPrices, getDisruptionScore, getTypicalImpact, getRegionalComparison, getPriceChanges, getSupplyHealth, getDownstreamImpact, getVolatility, getEvents, getSupplyInventories, getCurrentCrudePrice, getSeasonalComparison, getAaaNationalChanges, getDashboardOverview } from '../api/client';
 import DisruptionMeter from '../components/DisruptionMeter';
 import USPriceMap from '../components/USPriceMap';
 import ShareButtons from '../components/ShareButtons';
 import EmbedCodeGenerator from '../components/EmbedCodeGenerator';
 import { usePageSEO } from '../hooks/usePageSEO';
+import { useDashboardFilters } from '../hooks/useDashboardFilters';
 import { resolvePercentChange, toDisplayNumber } from '../lib/priceChange';
 
 const SUPPLY_CLR: Record<string, string> = {
@@ -38,13 +38,21 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [fuelType, setFuelType] = useState<'gas_regular' | 'diesel'>('gas_regular');
+  const [filters, setFilters] = useDashboardFilters();
+  const fuelType = filters.fuel;
   const fuelLabel = fuelType === 'gas_regular' ? 'Regular Gasoline' : 'Diesel';
 
   usePageSEO({
     title: 'US Gas Price Dashboard',
     description: 'Live US gasoline prices across all PADD regions and 50 states. Includes a Consumer Disruption Index, supply health alerts, and crude oil correlation. Data from EIA, FRED, and AAA.',
     canonicalPath: '/',
+  });
+
+  // ── Consolidated overview query (hero cards, alerts, freshness, drilldowns) ──
+  const { data: overview } = useQuery({
+    queryKey: ['dashboardOverview', fuelType, filters.region, filters.timerange, filters.overlay],
+    queryFn: () => getDashboardOverview(filters),
+    staleTime: 60 * 60 * 1000,
   });
 
   const { isLoading: pricesLoading } = useQuery({
@@ -160,7 +168,7 @@ export default function Dashboard() {
         {/* Fuel type toggle */}
         <div className="flex items-center bg-slate-800 rounded-lg border border-slate-700 p-1">
           <button
-            onClick={() => setFuelType('gas_regular')}
+            onClick={() => setFilters({ fuel: 'gas_regular' })}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
               fuelType === 'gas_regular'
                 ? 'bg-primary-600 text-white'
@@ -170,7 +178,7 @@ export default function Dashboard() {
             ⛽ Regular Gas
           </button>
           <button
-            onClick={() => setFuelType('diesel')}
+            onClick={() => setFilters({ fuel: 'diesel' })}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
               fuelType === 'diesel'
                 ? 'bg-primary-600 text-white'
@@ -641,7 +649,7 @@ export default function Dashboard() {
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 overflow-hidden">
         <h3 className="text-xl font-bold text-white mb-2">Regional Prices</h3>
         <p className="text-xs text-slate-500 mb-4">Click a state for detailed breakdown</p>
-        <USPriceMap comparisonData={comparisonData ?? []} height={380} onStateClick={(abbr) => navigate(`/state/${abbr}`)} />
+        <USPriceMap comparisonData={comparisonData ?? []} height={380} onStateClick={(abbr) => navigate(`/state/${abbr}${fuelType !== 'gas_regular' ? `?fuel=${fuelType}` : ''}`)} />
       </div>
 
       {/* Cost Impact */}
@@ -663,6 +671,54 @@ export default function Dashboard() {
 
       {/* Embed widgets */}
       <EmbedCodeGenerator />
+
+      {/* Overview alerts and drilldown recommendations from consolidated endpoint */}
+      {overview && (
+        <>
+          {overview.alerts.length > 0 && (
+            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+              <h3 className="text-lg font-bold text-white mb-4">⚠️ Active Alerts</h3>
+              <div className="space-y-3">
+                {overview.alerts.map((alert) => {
+                  const severityClr =
+                    alert.severity === 'critical' ? 'border-red-500/40 bg-red-500/10 text-red-300' :
+                    alert.severity === 'warning'  ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300' :
+                                                    'border-blue-500/40 bg-blue-500/10 text-blue-300';
+                  return (
+                    <div key={alert.id} className={`rounded-lg border px-4 py-3 text-sm ${severityClr}`}>
+                      <p className="font-semibold">{alert.title}</p>
+                      {alert.detail && <p className="mt-0.5 opacity-80">{alert.detail}</p>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {overview.drilldowns.length > 0 && (
+            <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+              <h3 className="text-lg font-bold text-white mb-4">🔍 Recommended Next Steps</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {overview.drilldowns.map((d, idx) => (
+                  <Link
+                    key={`drilldown-${idx}`}
+                    to={d.path}
+                    className="flex flex-col rounded-lg border border-slate-600 bg-slate-700/40 px-4 py-3 hover:border-primary-500/60 hover:bg-slate-700/80 transition-colors"
+                  >
+                    <span className="text-sm font-semibold text-primary-400">{d.label}</span>
+                    <span className="mt-0.5 text-xs text-slate-400">{d.reason}</span>
+                  </Link>
+                ))}
+              </div>
+              {overview.freshness.prices && (
+                <p className="mt-4 text-xs text-slate-600">
+                  Prices as of {new Date(overview.freshness.prices).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} (AAA)
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

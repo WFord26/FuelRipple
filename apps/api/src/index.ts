@@ -23,6 +23,7 @@ import supplyRouter from './routes/supply';
 import llmRouter from './routes/llm';
 import aaaRouter from './routes/aaa';
 import healthRouter from './routes/health';
+import dashboardRouter from './routes/dashboard';
 import { errorHandler } from './middleware/errorHandler';
 import { initializeCache } from './services/cache';
 import { initializeJobQueue } from './services/jobQueue';
@@ -97,6 +98,7 @@ app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/supply', supplyRouter);
 app.use('/api/v1/llm', llmRouter);
 app.use('/api/v1/aaa', aaaRouter);
+app.use('/api/v1/dashboard', dashboardRouter);
 
 // Error handling
 app.use(errorHandler);

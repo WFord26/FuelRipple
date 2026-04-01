@@ -3,12 +3,13 @@ import { redis } from './cache';
 import { fetchAllGasPrices, fetchDieselPrices, fetchRefineryUtilization, fetchRefineryProduction, fetchPetroleumStocks, fetchPetroleumImports, fetchFlowBalance, fetchRefineryCapacity820 } from './eiaClient';
 import { fetchCrudeQuotes } from './marketClient';
 import { fetchEconomicIndicators } from './fredClient';
-import { fetchAllStatePrices } from './aaaClient';
+import { fetchAllStatePricesOptimized } from './aaaClientV2';
 import { insertPrices, insertIndicators, upsertRefineryData, upsertCapacityData, refreshMaterializedViews, upsertNationalAverages, upsertLatestPrices, upsertStateAggregates, upsertPriceChangesCache, upsertPaddAggregates } from '@fuelripple/db';
 import type { RefineryOperationsRow, CapacityRow, AaaNationalAverageRow, AaaStateAggregateRow, AaaPaddAggregateRow, PriceChangesRow } from '@fuelripple/db';
 import { EnergyPrice, EconomicIndicator, PADD_REGIONS, STATE_POPULATIONS } from '@fuelripple/shared';
 import { abbrToDuoarea } from '../utils/regionMapper';
-import { trackApiException } from '../lib/appInsights';
+import { trackApiEvent, trackApiException, trackMetric } from '../lib/appInsights';
+import { assertAAAScrapeHealthy, summarizeAAAScrape } from './aaaIngestion';
 
 export let dataQueue: Queue | null = null;
 let bullmqConnOpts: Record<string, any> | null = null;
@@ -511,13 +512,29 @@ async function processEconomicIndicators(): Promise<void> {
 async function processAAAPrices(): Promise<void> {
   console.log('Fetching AAA state gas prices...');
 
-  const stateData = await fetchAllStatePrices();
+  const { results: stateData, metrics } = await fetchAllStatePricesOptimized({ verbose: true });
+  const scrapeSummary = summarizeAAAScrape(stateData);
+  trackMetric('aaa_scrape_total_states', scrapeSummary.totalStates);
+  trackMetric('aaa_scrape_populated_states', scrapeSummary.populatedStates);
+  trackApiEvent('aaa_scrape_finished', {
+    totalStates: scrapeSummary.totalStates.toString(),
+    populatedStates: scrapeSummary.populatedStates.toString(),
+    emptyStates: scrapeSummary.emptyStates.length.toString(),
+    requestSuccessCount: metrics.successCount.toString(),
+    requestFailureCount: metrics.failureCount.toString(),
+  });
+  console.log(
+    `AAA scrape summary: ${scrapeSummary.populatedStates}/${scrapeSummary.totalStates} states populated; ` +
+    `${scrapeSummary.emptyStates.length} empty`
+  );
+  assertAAAScrapeHealthy(stateData);
+
   const prices: EnergyPrice[] = [];
   const now = new Date();
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
-  // Clear any stale same-day records before inserting (prevents duplicate-timestamp
-  // conflicts if the job runs more than once in a day or after a local-midnight record)
+  // Clear any stale same-day records only after a healthy scrape so we do not
+  // wipe out an earlier successful run with an empty or partial result set.
   const { getKnex } = await import('@fuelripple/db');
   const knex = getKnex();
   await knex('aaa_state_aggregates')

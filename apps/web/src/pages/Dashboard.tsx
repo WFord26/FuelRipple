@@ -7,6 +7,7 @@ import USPriceMap from '../components/USPriceMap';
 import ShareButtons from '../components/ShareButtons';
 import EmbedCodeGenerator from '../components/EmbedCodeGenerator';
 import { usePageSEO } from '../hooks/usePageSEO';
+import { resolvePercentChange, toDisplayNumber } from '../lib/priceChange';
 
 const SUPPLY_CLR: Record<string, string> = {
   normal:        'text-green-400  bg-green-500/15  border-green-500/30',
@@ -209,6 +210,31 @@ export default function Dashboard() {
                 const LABELS: Record<string, string> = {
                   regular: 'Regular', mid_grade: 'Mid-Grade', premium: 'Premium', diesel: 'Diesel',
                 };
+                const currentPrice = toDisplayNumber(row?.current_price);
+                const weekAgoPrice = toDisplayNumber(row?.week_ago_price);
+                const monthAgoPrice = toDisplayNumber(row?.month_ago_price);
+                const threeMonthAgoPrice = toDisplayNumber(row?.three_month_ago_price);
+                const yearAgoPrice = toDisplayNumber(row?.year_ago_price);
+                const weekChangePct = resolvePercentChange({
+                  pct: row?.week_change_pct,
+                  currentPrice,
+                  previousPrice: weekAgoPrice,
+                });
+                const monthChangePct = resolvePercentChange({
+                  pct: row?.month_change_pct,
+                  currentPrice,
+                  previousPrice: monthAgoPrice,
+                });
+                const threeMonthChangePct = resolvePercentChange({
+                  pct: row?.three_month_change_pct,
+                  currentPrice,
+                  previousPrice: threeMonthAgoPrice,
+                });
+                const yearChangePct = resolvePercentChange({
+                  pct: row?.year_change_pct,
+                  currentPrice,
+                  previousPrice: yearAgoPrice,
+                });
 
                 const ChangeCell = ({ pct }: { pct: number | null | undefined }) =>
                   pct != null ? (
@@ -222,15 +248,15 @@ export default function Dashboard() {
                 return (
                   <tr key={key} className="border-b border-slate-700/50 hover:bg-slate-800/30 transition-colors">
                     <td className="px-3 py-2 text-slate-300 font-medium">{LABELS[key]}</td>
-                    <td className="text-center px-3 py-2 text-white font-semibold">{row?.current_price != null ? `$${row.current_price.toFixed(3)}` : '—'}</td>
-                    <td className="text-center px-3 py-2 text-slate-300">{row?.week_ago_price != null ? `$${row.week_ago_price.toFixed(3)}` : '—'}</td>
-                    <td className="text-center px-3 py-2"><ChangeCell pct={row?.week_change_pct} /></td>
-                    <td className="text-center px-3 py-2 text-slate-300">{row?.month_ago_price != null ? `$${row.month_ago_price.toFixed(3)}` : '—'}</td>
-                    <td className="text-center px-3 py-2"><ChangeCell pct={row?.month_change_pct} /></td>
-                    <td className="text-center px-3 py-2 text-slate-300">{row?.three_month_ago_price != null ? `$${row.three_month_ago_price.toFixed(3)}` : '—'}</td>
-                    <td className="text-center px-3 py-2"><ChangeCell pct={row?.three_month_change_pct} /></td>
-                    <td className="text-center px-3 py-2 text-slate-300">{row?.year_ago_price != null ? `$${row.year_ago_price.toFixed(3)}` : '—'}</td>
-                    <td className="text-center px-3 py-2"><ChangeCell pct={row?.year_change_pct} /></td>
+                    <td className="text-center px-3 py-2 text-white font-semibold">{currentPrice != null ? `$${currentPrice.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2 text-slate-300">{weekAgoPrice != null ? `$${weekAgoPrice.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2"><ChangeCell pct={weekChangePct} /></td>
+                    <td className="text-center px-3 py-2 text-slate-300">{monthAgoPrice != null ? `$${monthAgoPrice.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2"><ChangeCell pct={monthChangePct} /></td>
+                    <td className="text-center px-3 py-2 text-slate-300">{threeMonthAgoPrice != null ? `$${threeMonthAgoPrice.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2"><ChangeCell pct={threeMonthChangePct} /></td>
+                    <td className="text-center px-3 py-2 text-slate-300">{yearAgoPrice != null ? `$${yearAgoPrice.toFixed(3)}` : '—'}</td>
+                    <td className="text-center px-3 py-2"><ChangeCell pct={yearChangePct} /></td>
                   </tr>
                 );
               })}

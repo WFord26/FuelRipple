@@ -71,6 +71,7 @@ router.post('/flush-cache', async (req, res) => {
   try {
     // Clear L1 + L2 for all price and supply cache keys
     await Promise.all([
+      clearCache('aaa:*'),
       clearCache('prices:*'),
       clearCache('supply:*'),
       clearCache('correlation:*'),

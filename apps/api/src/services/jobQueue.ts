@@ -1,5 +1,5 @@
 import { Queue, Worker } from 'bullmq';
-import { redis } from './cache';
+import { clearCache, redis } from './cache';
 import { fetchAllGasPrices, fetchDieselPrices, fetchRefineryUtilization, fetchRefineryProduction, fetchPetroleumStocks, fetchPetroleumImports, fetchFlowBalance, fetchRefineryCapacity820 } from './eiaClient';
 import { fetchCrudeQuotes } from './marketClient';
 import { fetchEconomicIndicators } from './fredClient';
@@ -692,6 +692,8 @@ async function processAAAPrices(): Promise<void> {
   console.log(`✅ Upserted ${paddAggs.length} PADD aggregates`);
 
   await refreshMaterializedViews();
+  await clearCache('aaa:*');
+  console.log('✅ Cleared AAA caches');
 }
 
 /**

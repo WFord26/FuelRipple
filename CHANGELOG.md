@@ -9,13 +9,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Dashboard URL filter state** (`apps/web/src/hooks/useDashboardFilters.ts`) — new `useDashboardFilters()` hook that persists all dashboard filters (`fuel`, `region`, `timerange`, `compare`, `overlay`) in the URL search params:
+  - Filter selections survive page refresh and can be shared via link
+  - Only non-default values are written to the URL to keep links clean
+  - Reads current params inside the `setSearchParams` updater callback to avoid stale closure bugs
+  - Dashboard fuel toggle now uses this hook — the `gas_regular` / `diesel` selection is bookmarkable and survives navigation
+  - State-page map click carries the active `fuel` filter forward into the destination URL
+
+- **Consolidated `GET /api/v1/dashboard/overview` endpoint** (`apps/api/src/routes/dashboard.ts`) — new aggregation endpoint that packages all dashboard hero data into a single request, reducing the per-page query fan-out:
+  - **Hero cards** — per-grade current price with week / month / year percentage changes (from AAA national changes)
+  - **Summary stats** — disruption score & classification, annualized volatility & classification, seasonal delta vs 5-year average
+  - **Alerts** — severity-classified alerts for price spikes (> 5 % weekly move), supply stress / critical PADD regions, and recent geo-events (within 30 days)
+  - **Freshness** — ISO timestamps per data component (prices, disruption, supply health, events)
+  - **Drilldowns** — context-aware navigation recommendations (e.g. links to `/supply` when supply stress is detected)
+  - **Filters** — active filters echoed back so clients can reconstruct state from the response
+  - All five data sources fetched in parallel via `Promise.allSettled`; individual source failures degrade gracefully without failing the whole response
+  - Accepts `fuel`, `region`, `timerange`, `compare`, `overlay` query params validated by `DashboardFiltersSchema`
+  - Cached via the two-tier L1/L2 cache at a 1-hour TTL (`CACHE_TTL.DASHBOARD_OVERVIEW`)
+
+- **Dashboard Zod schemas** (`packages/shared/src/schemas.ts`) — canonical type contracts for the dashboard layer:
+  - `DashboardFiltersSchema` / `DashboardFilters` — URL filter state shape
+  - `DashboardHeroCardSchema` / `DashboardHeroCard` — per-grade price card
+  - `DashboardSummaryStatsSchema` / `DashboardSummaryStats` — disruption + volatility + seasonal aggregate
+  - `DashboardAlertSchema` / `DashboardAlert` — typed alert with `type`, `severity`, `title`, `detail`, `asOf`
+  - `DashboardFreshnessSchema` / `DashboardFreshness` — per-source data age metadata
+  - `DashboardDrilldownSchema` / `DashboardDrilldown` — navigation recommendation with `label`, `path`, `reason`
+  - `DashboardOverviewResponseSchema` / `DashboardOverviewResponse` — full response envelope
+
+- **`CACHE_TTL.DASHBOARD_OVERVIEW`** (`packages/shared/src/constants.ts`) — 1-hour TTL constant for the overview endpoint
+
+- **`getDashboardOverview()`** (`apps/web/src/api/client.ts`) — typed API client wrapper for the new overview endpoint
+
+### Changed
+
+- **Dashboard active alerts and drilldowns** (`apps/web/src/pages/Dashboard.tsx`) — two new sections rendered from the consolidated overview response:
+  - **Active Alerts** — severity-color-coded banners for price spikes, supply stress, and recent geo-events
+  - **Recommended Next Steps** — card grid of context-aware navigation links with reasons
+
 - **Server-side cache warming** (`apps/api/src/services/cacheWarmer.ts`) — pre-populates Redis and L1 cache on server startup to eliminate first-visitor latency after cold starts or deploys:
   - Fires 19 parallel `fetch` requests to all dashboard endpoints for both `gas_regular` and `diesel` fuel types immediately after the server starts listening
   - Uses `Promise.allSettled` so a single slow endpoint (e.g. supply health z-score calculation) does not block the rest
   - Logs warm results (`✅ Cache warm: N/19 endpoints ready`) and warns on individual failures without crashing the server
   - Runs entirely in the background — does not delay the server accepting user requests
-
-### Changed
 
 - **Dashboard progressive rendering** (`apps/web/src/pages/Dashboard.tsx`) — the full-page "Loading dashboard..." spinner now only blocks on `currentPrices` instead of waiting for `disruptionScore` and `typicalImpact` as well; disruption and impact sections render their own inline "Loading…" placeholders while data arrives
 - **Dashboard query stale times** (`apps/web/src/pages/Dashboard.tsx`) — added `staleTime: 60 * 60 * 1000` (1 hour) to `currentPrices`, `priceChanges`, `priceComparison`, `disruptionScore`, and `typicalImpact` queries; previously these had no stale time (default = 0), causing a full 13-request refetch cascade on every browser tab focus

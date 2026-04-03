@@ -160,6 +160,7 @@ export const CACHE_TTL = {
   HISTORICAL: 7 * 24 * 60 * 60,  // 7 days
   DISRUPTION_SCORE: 60 * 60,      // 1 hour
   DOWNSTREAM: 24 * 60 * 60,       // 24 hours
+  DASHBOARD_OVERVIEW: 60 * 60,    // 1 hour — aggregated from weekly + disruption data
 } as const;
 
 // API Rate Limits

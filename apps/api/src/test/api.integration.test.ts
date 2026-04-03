@@ -392,3 +392,88 @@ describe('Supply endpoints', () => {
     expect(Array.isArray(res.body.data)).toBe(true);
   });
 });
+
+describe('Dashboard endpoints', () => {
+  it('GET /api/v1/dashboard/overview returns consolidated overview', async () => {
+    const res = await request(app).get('/api/v1/dashboard/overview');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(res.body.data).toHaveProperty('heroCards');
+    expect(res.body.data).toHaveProperty('summaryStats');
+    expect(res.body.data).toHaveProperty('alerts');
+    expect(res.body.data).toHaveProperty('freshness');
+    expect(res.body.data).toHaveProperty('drilldowns');
+    expect(res.body.data).toHaveProperty('filters');
+    expect(Array.isArray(res.body.data.heroCards)).toBe(true);
+    expect(Array.isArray(res.body.data.alerts)).toBe(true);
+    expect(Array.isArray(res.body.data.drilldowns)).toBe(true);
+  });
+
+  it('GET /api/v1/dashboard/overview defaults to gas_regular fuel filter', async () => {
+    const res = await request(app).get('/api/v1/dashboard/overview');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.filters.fuel).toBe('gas_regular');
+    expect(res.body.data.filters.region).toBe('US');
+    expect(res.body.data.filters.timerange).toBe('1m');
+    expect(res.body.data.filters.overlay).toBe('none');
+  });
+
+  it('GET /api/v1/dashboard/overview accepts fuel=diesel filter', async () => {
+    const res = await request(app).get('/api/v1/dashboard/overview?fuel=diesel');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.filters.fuel).toBe('diesel');
+    expect(res.body.data.heroCards.length).toBeGreaterThan(0);
+    expect(res.body.data.heroCards[0].metric).toBe('diesel');
+  });
+
+  it('GET /api/v1/dashboard/overview accepts region and overlay filters', async () => {
+    const res = await request(app).get('/api/v1/dashboard/overview?region=R10&overlay=events&timerange=3m');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.filters.region).toBe('R10');
+    expect(res.body.data.filters.overlay).toBe('events');
+    expect(res.body.data.filters.timerange).toBe('3m');
+  });
+
+  it('GET /api/v1/dashboard/overview has correct summaryStats shape', async () => {
+    const res = await request(app).get('/api/v1/dashboard/overview');
+
+    expect(res.status).toBe(200);
+    const stats = res.body.data.summaryStats;
+    expect(stats).toHaveProperty('disruptionScore');
+    expect(stats).toHaveProperty('disruptionClassification');
+    expect(stats).toHaveProperty('annualizedVolatility');
+    expect(stats).toHaveProperty('volatilityClassification');
+    expect(stats).toHaveProperty('seasonalDelta');
+    expect(stats).toHaveProperty('seasonalDeltaPct');
+  });
+
+  it('GET /api/v1/dashboard/overview hero cards contain required fields', async () => {
+    const res = await request(app).get('/api/v1/dashboard/overview');
+
+    expect(res.status).toBe(200);
+    for (const card of res.body.data.heroCards) {
+      expect(card).toHaveProperty('metric');
+      expect(card).toHaveProperty('label');
+      expect(card).toHaveProperty('currentPrice');
+      expect(card).toHaveProperty('weekChangePct');
+      expect(card).toHaveProperty('monthChangePct');
+      expect(card).toHaveProperty('yearChangePct');
+      expect(card).toHaveProperty('asOf');
+    }
+  });
+
+  it('GET /api/v1/dashboard/overview freshness has correct shape', async () => {
+    const res = await request(app).get('/api/v1/dashboard/overview');
+
+    expect(res.status).toBe(200);
+    const freshness = res.body.data.freshness;
+    expect(freshness).toHaveProperty('prices');
+    expect(freshness).toHaveProperty('disruption');
+    expect(freshness).toHaveProperty('supplyHealth');
+    expect(freshness).toHaveProperty('events');
+  });
+});

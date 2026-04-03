@@ -96,3 +96,79 @@ export const BlogPostMetaSchema = z.object({
 });
 
 export type BlogPostMeta = z.infer<typeof BlogPostMetaSchema>;
+
+// ── Dashboard URL Filter State ────────────────────────────────────────────────
+
+export const DashboardFiltersSchema = z.object({
+  fuel:      z.enum(['gas_regular', 'diesel']).default('gas_regular'),
+  region:    z.string().default('US'),
+  timerange: z.enum(['1w', '1m', '3m', '1y', 'all']).default('1m'),
+  compare:   z.string().optional(),   // comma-separated regions to overlay
+  overlay:   z.enum(['none', 'events', 'crude']).default('none'),
+});
+
+export type DashboardFilters = z.infer<typeof DashboardFiltersSchema>;
+
+// ── Dashboard Overview Response ───────────────────────────────────────────────
+
+export const DashboardHeroCardSchema = z.object({
+  metric:          z.string(),
+  label:           z.string(),
+  currentPrice:    z.number().nullable(),
+  weekChangePct:   z.number().nullable(),
+  monthChangePct:  z.number().nullable(),
+  yearChangePct:   z.number().nullable(),
+  asOf:            z.string().nullable(),
+});
+
+export type DashboardHeroCard = z.infer<typeof DashboardHeroCardSchema>;
+
+export const DashboardSummaryStatsSchema = z.object({
+  disruptionScore:          z.number().nullable(),
+  disruptionClassification: z.string().nullable(),
+  annualizedVolatility:     z.number().nullable(),
+  volatilityClassification: z.string().nullable(),
+  seasonalDelta:            z.number().nullable(),
+  seasonalDeltaPct:         z.number().nullable(),
+});
+
+export type DashboardSummaryStats = z.infer<typeof DashboardSummaryStatsSchema>;
+
+export const DashboardAlertSchema = z.object({
+  id:       z.string(),
+  type:     z.enum(['geo_event', 'supply_health', 'price_spike']),
+  severity: z.enum(['info', 'warning', 'critical']),
+  title:    z.string(),
+  detail:   z.string().optional(),
+  asOf:     z.string().optional(),
+});
+
+export type DashboardAlert = z.infer<typeof DashboardAlertSchema>;
+
+export const DashboardFreshnessSchema = z.object({
+  prices:       z.string().nullable(),
+  disruption:   z.string().nullable(),
+  supplyHealth: z.string().nullable(),
+  events:       z.string().nullable(),
+});
+
+export type DashboardFreshness = z.infer<typeof DashboardFreshnessSchema>;
+
+export const DashboardDrilldownSchema = z.object({
+  label: z.string(),
+  path:  z.string(),
+  reason: z.string(),
+});
+
+export type DashboardDrilldown = z.infer<typeof DashboardDrilldownSchema>;
+
+export const DashboardOverviewResponseSchema = z.object({
+  heroCards:   z.array(DashboardHeroCardSchema),
+  summaryStats: DashboardSummaryStatsSchema,
+  alerts:      z.array(DashboardAlertSchema),
+  freshness:   DashboardFreshnessSchema,
+  drilldowns:  z.array(DashboardDrilldownSchema),
+  filters:     DashboardFiltersSchema,
+});
+
+export type DashboardOverviewResponse = z.infer<typeof DashboardOverviewResponseSchema>;

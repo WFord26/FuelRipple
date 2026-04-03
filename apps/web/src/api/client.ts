@@ -269,6 +269,28 @@ export const getSupplyCapacity = async (year?: number) => {
 
 export default apiClient;
 
+// ── Dashboard Overview ─────────────────────────────────────────────────────
+
+import type { DashboardFilters, DashboardOverviewResponse } from '@fuelripple/shared';
+
+/**
+ * Consolidated dashboard overview — hero cards, summary stats, alerts,
+ * freshness metadata, and drilldown recommendations.
+ */
+export const getDashboardOverview = async (
+  filters?: Partial<DashboardFilters>
+): Promise<DashboardOverviewResponse> => {
+  const params: Record<string, string> = {};
+  if (filters?.fuel)      params.fuel      = filters.fuel;
+  if (filters?.region)    params.region    = filters.region;
+  if (filters?.timerange) params.timerange = filters.timerange;
+  if (filters?.compare)   params.compare   = filters.compare;
+  if (filters?.overlay)   params.overlay   = filters.overlay;
+
+  const response = await apiClient.get('/dashboard/overview', { params });
+  return response.data.data as DashboardOverviewResponse;
+};
+
 // ── AAA National Averages ──────────────────────────────────────────────────
 
 export interface AaaNationalAverage {

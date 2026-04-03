@@ -12,7 +12,7 @@ import * as dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
-import { fetchAllStatePrices } from '../services/aaaClient';
+import { fetchAllStatePricesOptimized } from '../services/aaaClientV2';
 import {
   insertPrices,
   upsertNationalAverages,
@@ -25,6 +25,7 @@ import type { AaaNationalAverageRow, AaaStateAggregateRow } from '@fuelripple/db
 import type { EnergyPrice } from '@fuelripple/shared';
 import { abbrToDuoarea } from '../utils/regionMapper';
 import { initializeCache, clearCache } from '../services/cache';
+import { assertAAAScrapeHealthy } from '../services/aaaIngestion';
 
 const avg = (vals: number[]) =>
   vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
@@ -39,7 +40,11 @@ async function main(): Promise<void> {
   const now = new Date();
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
-  const stateData = await fetchAllStatePrices();
+  const { results: stateData } = await fetchAllStatePricesOptimized({ verbose: true });
+  const scrapeSummary = assertAAAScrapeHealthy(stateData);
+  console.log(
+    `✅ AAA scrape validated: ${scrapeSummary.populatedStates}/${scrapeSummary.totalStates} states returned prices`
+  );
 
   // --- energy_prices rows ---
   const prices: EnergyPrice[] = [];
@@ -52,8 +57,8 @@ async function main(): Promise<void> {
     if (sp.diesel   !== null) prices.push({ time: today, source: 'aaa', metric: 'diesel',       region: duoarea, value: sp.diesel,    unit: 'usd_per_gallon' });
   }
 
-  // Remove any existing records for today stored at a different timestamp
-  // (e.g. local-midnight vs UTC-midnight) to prevent duplicate-day confusion
+  // Remove any existing records for today stored at a different timestamp only
+  // after a healthy scrape has completed.
   const knex = getKnex();
   await knex('aaa_state_aggregates')
     .whereRaw(`time::date = ?::date`, [today.toISOString()])

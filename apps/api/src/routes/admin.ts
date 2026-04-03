@@ -19,7 +19,7 @@ router.post('/trigger-jobs', async (req, res) => {
 
     // Trigger all data fetching jobs
     await dataQueue.add('fetch-eia-gas', {}, { priority: 1 });
-    await dataQueue.add('fetch-eia-crude', {}, { priority: 2 });
+    await dataQueue.add('fetch-market-crude', {}, { priority: 2 });
     await dataQueue.add('fetch-eia-diesel', {}, { priority: 3 });
     await dataQueue.add('fetch-fred-indicators', {}, { priority: 4 });
     await dataQueue.add('fetch-aaa-prices', {}, { priority: 5 });
@@ -27,7 +27,7 @@ router.post('/trigger-jobs', async (req, res) => {
 
     res.json({
       message: 'Jobs triggered successfully',
-      jobs: ['fetch-eia-gas', 'fetch-eia-crude', 'fetch-eia-diesel', 'fetch-fred-indicators', 'fetch-aaa-prices', 'fetch-eia-refinery']
+      jobs: ['fetch-eia-gas', 'fetch-market-crude', 'fetch-eia-diesel', 'fetch-fred-indicators', 'fetch-aaa-prices', 'fetch-eia-refinery']
     });
   } catch (error) {
     console.error('Error triggering jobs:', error);
@@ -71,6 +71,7 @@ router.post('/flush-cache', async (req, res) => {
   try {
     // Clear L1 + L2 for all price and supply cache keys
     await Promise.all([
+      clearCache('aaa:*'),
       clearCache('prices:*'),
       clearCache('supply:*'),
       clearCache('correlation:*'),

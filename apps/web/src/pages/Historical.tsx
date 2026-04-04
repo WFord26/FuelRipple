@@ -1,8 +1,8 @@
 ﻿import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { getAaaNationalHistory, getAaaStateHistory, getAaaPaddHistory } from '../api/client';
 import { usePageSEO } from '../hooks/usePageSEO';
+import { ChartContainer, PriceLineChart, type PriceChartSeries } from '../components/charts';
 
 type TimeRange = '7D' | '30D' | '90D' | '1Y' | '5Y' | 'ALL';
 type FuelGrade = 'regular' | 'mid_grade' | 'premium' | 'diesel';
@@ -352,65 +352,65 @@ export default function Historical() {
       </div>
 
       {/* Main Chart */}
-      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-white">Price History</h3>
-            <p className="text-xs text-slate-400 mt-1">{regionLabel}</p>
-          </div>
-          <div className="text-xs text-slate-500 bg-slate-700 px-3 py-1 rounded">
-            {chartData.length} days
-          </div>
-        </div>
+      {useMemo(() => {
+        // Build series dynamically based on active fuels
+        const baseSeries: PriceChartSeries[] = [
+          { key: 'regular', name: 'Regular', color: '#3b82f6', dataKey: 'regular' },
+          { key: 'mid_grade', name: 'Mid Grade', color: '#8b5cf6', dataKey: 'mid_grade' },
+          { key: 'premium', name: 'Premium', color: '#ec4899', dataKey: 'premium' },
+          { key: 'diesel', name: 'Diesel', color: '#10b981', dataKey: 'diesel' },
+        ].filter(s => activeFuels.has(s.key as FuelGrade));
 
-        {isLoading ? (
-          <div className="flex items-center justify-center h-96">
-            <div className="text-slate-400">Loading AAA price data...</div>
-          </div>
-        ) : chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={450}>
-            <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis
-                dataKey="time"
-                stroke="#94a3b8"
-                style={{ fontSize: '12px' }}
-                tick={{ fill: '#94a3b8' }}
-              />
-              <YAxis
-                stroke="#94a3b8"
-                style={{ fontSize: '12px' }}
-                tick={{ fill: '#94a3b8' }}
-                label={{ value: 'Price ($/gal)', angle: -90, position: 'insideLeft', fill: '#94a3b8' }}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #475569',
-                  borderRadius: '8px',
-                }}
-                labelStyle={{ color: '#e2e8f0' }}
-                wrapperStyle={{ outline: 'none' }}
-              />
-              <Legend wrapperStyle={{ paddingTop: '20px' }} />
-              
-              {/* AAA Fuel Grades */}
-              {activeFuels.has('regular') && <Line type="monotone" dataKey="regular" stroke="#3b82f6" name="Regular" dot={false} isAnimationActive={false} />}
-              {activeFuels.has('mid_grade') && <Line type="monotone" dataKey="mid_grade" stroke="#8b5cf6" name="Mid Grade" dot={false} isAnimationActive={false} />}
-              {activeFuels.has('premium') && <Line type="monotone" dataKey="premium" stroke="#ec4899" name="Premium" dot={false} isAnimationActive={false} />}
-              {activeFuels.has('diesel') && <Line type="monotone" dataKey="diesel" stroke="#10b981" name="Diesel" dot={false} isAnimationActive={false} />}
-              
-              {/* Moving Averages */}
-              {showMovingAverage && activeFuels.has('regular') && <Line type="monotone" dataKey="regularMA" stroke="#3b82f6" name="Regular 7MA" dot={false} strokeDasharray="5 5" strokeWidth={1.5} isAnimationActive={false} />}
-              {showMovingAverage && activeFuels.has('diesel') && <Line type="monotone" dataKey="dieselMA" stroke="#10b981" name="Diesel 7MA" dot={false} strokeDasharray="5 5" strokeWidth={1.5} isAnimationActive={false} />}
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="flex items-center justify-center h-96">
-            <div className="text-slate-400">No data available for this region and time range</div>
-          </div>
-        )}
-      </div>
+        // Add moving averages if enabled
+        if (showMovingAverage) {
+          if (activeFuels.has('regular')) {
+            baseSeries.push({
+              key: 'regularMA',
+              name: 'Regular 7MA',
+              color: '#3b82f6',
+              dataKey: 'regularMA',
+              strokeWidth: 2,
+            });
+          }
+          if (activeFuels.has('diesel')) {
+            baseSeries.push({
+              key: 'dieselMA',
+              name: 'Diesel 7MA',
+              color: '#10b981',
+              dataKey: 'dieselMA',
+              strokeWidth: 2,
+            });
+          }
+        }
+
+        return (
+          <ChartContainer
+            title="Price History"
+            subtitle={regionLabel}
+            height={450}
+            isLoading={isLoading}
+            isEmpty={chartData.length === 0}
+            emptyMessage="No data available for this region and time range"
+            actions={
+              <div className="text-xs text-slate-500 bg-slate-700 px-3 py-1 rounded">
+                {chartData.length} days
+              </div>
+            }
+          >
+            <PriceLineChart
+              data={chartData}
+              series={baseSeries}
+              height={450}
+              yAxisLabel="Price ($/gal)"
+              tooltip={{
+                formatter: (value) => `$${(value as number).toFixed(3)}`,
+                labelFormatter: (label) => label,
+              }}
+            />
+          </ChartContainer>
+        );
+      }, [activeFuels, showMovingAverage, chartData, isLoading, regionLabel])}
+      
 
       {/* Statistics Grid */}
       {activeFuels.size > 0 && Object.values(stats).some(s => s !== null) && (

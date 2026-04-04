@@ -3,21 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { getAaaPaddRegions, getAllAaaStatePrices } from '../api/client';
 import { usePageSEO } from '../hooks/usePageSEO';
-import { Chart, Settings, BarSeries, Axis, DARK_THEME, ScaleType, Position, Tooltip } from '@elastic/charts';
-import '@elastic/charts/dist/theme_dark.css';
+import { ChartContainer, ComparisonBarChart } from '../components/charts';
 import USPriceMap from '../components/USPriceMap';
-
-const barTheme = {
-  ...DARK_THEME,
-  background: { color: '#1e293b' },
-  axes: {
-    ...DARK_THEME.axes,
-    gridLine: {
-      horizontal: { stroke: '#334155', strokeWidth: 1, dash: [3, 3] },
-      vertical: { visible: false },
-    },
-  },
-};
 
 // Grade display config
 const GRADES = [
@@ -249,46 +236,32 @@ export default function Comparison() {
       {/* Chart */}
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
         <h3 className="text-lg font-semibold text-white mb-4">Regional Price Comparison</h3>
-        {isLoading ? (
-          <div className="flex items-center justify-center h-96">
-            <div className="text-slate-400">Loading comparison data...</div>
-          </div>
-        ) : chartData.length > 0 ? (
-          <Chart size={{ height: 340 }}>
-            <Settings theme={barTheme} showLegend={false} />
-            <Tooltip
-              headerFormatter={({ value }) => `${value}`}
-            />
-            <Axis
-              id="x-axis"
-              position={Position.Bottom}
-              style={{ tickLabel: { fill: '#94a3b8', fontSize: 12 }, axisLine: { stroke: '#475569' }, tickLine: { stroke: '#475569' } }}
-            />
-            <Axis
-              id="y-axis"
-              position={Position.Left}
-              tickFormat={(d) => `$${Number(d).toFixed(2)}`}
-              style={{ tickLabel: { fill: '#94a3b8', fontSize: 11 }, axisLine: { stroke: '#475569' }, tickLine: { stroke: '#475569' } }}
-            />
-            {chartData.map(entry => (
-              <BarSeries
-                key={entry.code}
-                id={entry.code}
-                name={entry.name}
-                data={[{ x: entry.name, y: entry.price }]}
-                xAccessor="x"
-                yAccessors={['y']}
-                xScaleType={ScaleType.Ordinal}
-                yScaleType={ScaleType.Linear}
-                color={entry.color}
-              />
-            ))}
-          </Chart>
-        ) : (
-          <div className="flex items-center justify-center h-96">
-            <div className="text-slate-400">No comparison data available</div>
-          </div>
-        )}
+        <ChartContainer
+          height={340}
+          isLoading={isLoading}
+          isEmpty={chartData.length === 0}
+          emptyMessage="No comparison data available"
+        >
+          <ComparisonBarChart
+            data={chartData}
+            series={[
+              {
+                key: 'price',
+                name: 'Price',
+                dataKey: 'price',
+                color: '#3b82f6',
+              },
+            ]}
+            layout="horizontal"
+            xAxisKey="name"
+            yAxisTickFormatter={(v) => `$${Number(v).toFixed(2)}`}
+            tooltip={{
+              formatter: (value) => `$${Number(value).toFixed(3)}`,
+              labelFormatter: (label) => label,
+            }}
+            margin={{ top: 8, right: 16, bottom: 0, left: 100 }}
+          />
+        </ChartContainer>
       </div>
 
       {/* PADD Region Cards with state breakdown */}

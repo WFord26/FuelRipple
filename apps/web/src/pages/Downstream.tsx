@@ -2,20 +2,13 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { usePageSEO } from '../hooks/usePageSEO';
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  ResponsiveContainer,
-  ReferenceLine,
   Sankey,
   Layer,
   Rectangle,
+  Tooltip as RechartsTooltip,
 } from 'recharts';
 import { getDownstreamImpact, getEconomicIndicators } from '../api/client';
+import { ChartContainer, PriceLineChart } from '../components/charts';
 
 // ── Type helpers ──────────────────────────────────────────────────────────────
 interface DownstreamData {
@@ -129,24 +122,6 @@ function SankeyTooltip({ active, payload }: any) {
       <div className="text-slate-400 mt-0.5">
         Relative flow: <span className="text-white font-mono">{link.value}</span>
       </div>
-    </div>
-  );
-}
-
-// ── BLS Chart tooltip ─────────────────────────────────────────────────────────
-function BlsTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs shadow-lg min-w-[170px]">
-      <p className="text-slate-400 mb-1 font-medium">{label}</p>
-      {payload.map((p: any) => (
-        <div key={p.dataKey} className="flex justify-between gap-4">
-          <span style={{ color: p.color }}>{p.name}</span>
-          <span className="font-mono text-white">
-            {p.value !== null && p.value !== undefined ? `${p.value >= 0 ? '+' : ''}${p.value.toFixed(2)}%` : '–'}
-          </span>
-        </div>
-      ))}
     </div>
   );
 }
@@ -405,68 +380,28 @@ export default function Downstream() {
               <span className="text-xs">Run the backfill to seed historical CPI and PPI series from FRED.</span>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={blsChartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fill: '#94a3b8', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={{ stroke: '#475569' }}
-                  interval={11} // ~yearly ticks
-                />
-                <YAxis
-                  tick={{ fill: '#94a3b8', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={{ stroke: '#475569' }}
-                  tickFormatter={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(0)}%`}
-                />
-                <RechartsTooltip content={<BlsTooltip />} />
-                <Legend
-                  wrapperStyle={{ fontSize: 12, color: '#94a3b8', paddingTop: 12 }}
-                />
-                <ReferenceLine y={2}  stroke="#22d3ee" strokeDasharray="4 2" label={{ value: 'Fed 2% target', fill: '#22d3ee', fontSize: 10, position: 'right' }} />
-                <ReferenceLine y={0}  stroke="#475569" />
-                <Line
-                  type="monotone"
-                  dataKey="cpi"
-                  name="CPI All Urban"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={false}
-                  connectNulls
-                />
-                <Line
-                  type="monotone"
-                  dataKey="food"
-                  name="CPI Food at Home"
-                  stroke="#f97316"
-                  strokeWidth={2}
-                  dot={false}
-                  connectNulls
-                />
-                <Line
-                  type="monotone"
-                  dataKey="ppiTrucking"
-                  name="PPI Truck Transport"
-                  stroke="#f59e0b"
-                  strokeWidth={2}
-                  strokeDasharray="5 3"
-                  dot={false}
-                  connectNulls
-                />
-                <Line
-                  type="monotone"
-                  dataKey="ppiFreight"
-                  name="PPI Freight (commodity)"
-                  stroke="#a78bfa"
-                  strokeWidth={2}
-                  strokeDasharray="3 3"
-                  dot={false}
-                  connectNulls
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <ChartContainer
+              height={300}
+              isLoading={false}
+              isEmpty={false}
+            >
+              <PriceLineChart
+                data={blsChartData}
+                series={[
+                  { key: 'cpi', name: 'CPI All Urban', color: '#3b82f6', dataKey: 'cpi' },
+                  { key: 'food', name: 'CPI Food at Home', color: '#f97316', dataKey: 'food' },
+                  { key: 'ppiTrucking', name: 'PPI Truck Transport', color: '#f59e0b', dataKey: 'ppiTrucking' },
+                  { key: 'ppiFreight', name: 'PPI Freight (commodity)', color: '#a78bfa', dataKey: 'ppiFreight' },
+                ]}
+                xAxisKey="month"
+                xAxisTickFormatter={(v) => v}
+                yAxisTickFormatter={(v) => `${v >= 0 ? '+' : ''}${(v as number).toFixed(0)}%`}
+                margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                tooltip={{
+                  formatter: (value) => `${(value as number) >= 0 ? '+' : ''}${(value as number).toFixed(2)}%`,
+                }}
+              />
+            </ChartContainer>
           )}
         </div>
       </section>

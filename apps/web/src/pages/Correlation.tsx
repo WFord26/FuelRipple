@@ -2,13 +2,25 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { usePageSEO } from '../hooks/usePageSEO';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
-  Cell, ResponsiveContainer, ComposedChart, Line, Legend, LineChart,
+  BarChart as RechartsBarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceLine,
+  Cell,
+  ResponsiveContainer,
+  ComposedChart,
+  Line,
+  Legend,
+  LineChart,
 } from 'recharts';
 import {
   getCrudeGasCorrelation, getRocketsAndFeathers,
   getCorrelationPriceSeries, getEvents, getDailyCrudePrices,
 } from '../api/client';
+import { CorrelationTooltip } from '../components/charts';
 
 // ── Event category config ─────────────────────────────────────────────────────
 
@@ -54,28 +66,9 @@ interface LagPoint { lag: number; correlation: number; }
 function CrossCorrelationChart({
   data, optimalLag,
 }: { data: LagPoint[]; optimalLag: number }) {
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (!active || !payload?.length) return null;
-    const { lag, correlation } = payload[0].payload as LagPoint;
-    return (
-      <div className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm shadow-xl">
-        <div className="text-slate-300 font-medium">
-          {lag === 0 ? 'Same week' : `${lag}-week lag`}
-        </div>
-        <div className="text-white font-bold tabular-nums">
-          r = {correlation.toFixed(3)}
-        </div>
-        <div className="text-slate-400 text-xs">{classifyCorrelation(correlation)} correlation</div>
-        {lag === optimalLag && (
-          <div className="text-amber-400 text-xs font-semibold mt-0.5">★ Optimal lag</div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+      <RechartsBarChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
         <XAxis
           dataKey="lag"
@@ -89,7 +82,27 @@ function CrossCorrelationChart({
           tickFormatter={(v: number) => v.toFixed(1)}
           label={{ value: 'Pearson r', angle: -90, position: 'insideLeft', offset: 10, fill: '#64748b', fontSize: 12 }}
         />
-        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+        <Tooltip
+          content={(props: any) => (
+            <CorrelationTooltip
+              {...props}
+              renderExtra={(payloadItem) => {
+                const entry = payloadItem as LagPoint;
+                return (
+                  <>
+                    <div className="text-slate-400 text-xs">
+                      {classifyCorrelation(entry.correlation)} correlation
+                    </div>
+                    {entry.lag === optimalLag && (
+                      <div className="text-amber-400 text-xs font-semibold mt-0.5">★ Optimal lag</div>
+                    )}
+                  </>
+                );
+              }}
+            />
+          )}
+          cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+        />
         <ReferenceLine y={0} stroke="#475569" strokeWidth={1} />
         <Bar dataKey="correlation" radius={[3, 3, 0, 0]}>
           {data.map((entry) => (
@@ -100,7 +113,7 @@ function CrossCorrelationChart({
             />
           ))}
         </Bar>
-      </BarChart>
+      </RechartsBarChart>
     </ResponsiveContainer>
   );
 }

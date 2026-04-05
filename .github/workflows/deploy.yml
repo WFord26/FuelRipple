@@ -7,12 +7,15 @@
 #   ACR_LOGIN_SERVER        — e.g. acrfuelripplewforddev.azurecr.io
 #   ACR_USERNAME            — ACR admin username
 #   ACR_PASSWORD            — ACR admin password
-#   AZUREAPPSERVICE_CLIENTID_19B9CF6E5E8F4F62B5FD4D18E54C5600
-#   AZUREAPPSERVICE_TENANTID_2C00FBAC276C4F1ABC367E552374A0CA
-#   AZUREAPPSERVICE_SUBSCRIPTIONID_43645EA172E34549B2664D9DDDEFE163
 #   DATABASE_URL            — Full PostgreSQL connection string (migrations)
 #   APPINSIGHTS_CONNECTION_STRING — Azure Application Insights connection string
 #                                   (baked into web image at build time)
+#
+# Azure OIDC Federated Identity (no secrets needed for Azure CLI):
+#   App registration must have federated credential configured for:
+#   - Issuer: https://token.actions.githubusercontent.com
+#   - Subject: repo:WFord26/FuelRipple:ref:refs/heads/main
+#   - Audience: api://AzureADTokenExchange
 # =============================================================================
 
 name: Build + Deploy
@@ -228,12 +231,12 @@ jobs:
             health_url: https://www.fuelripple.com/
 
     steps:
-      - name: Azure login
+      - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_19B9CF6E5E8F4F62B5FD4D18E54C5600 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_2C00FBAC276C4F1ABC367E552374A0CA }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_43645EA172E34549B2664D9DDDEFE163 }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Update ${{ matrix.app }} container image
         run: |

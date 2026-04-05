@@ -9,9 +9,11 @@ import {
   getStatePrice,
   getTypicalImpact,
   getAaaMetrosLatest,
+  getEvents,
 } from '../api/client';
 import { PriceChart } from '../components/PriceChart';
 import { MetroHeatmap } from '../components/MetroHeatmap';
+import StoryCard, { StoryCardData } from '../components/StoryCard';
 import { usePageSEO } from '../hooks/usePageSEO';
 
 // ── State → EIA duoarea code mapping ─────────────────────────────────────────
@@ -134,6 +136,13 @@ export default function State() {
     enabled: !!stateName,
   });
 
+  // Recent market events for context
+  const { data: recentEvents = [] } = useQuery({
+    queryKey: ['stateEvents'],
+    queryFn: () => getEvents(),
+    staleTime: 60 * 60 * 1000,
+  });
+
   // Extract all prices from AAA data
   const allGrades = useMemo(() => {
     if (!stateLatest || !nationalLatest) return null;
@@ -214,6 +223,37 @@ export default function State() {
           </p>
         </div>
       </div>
+
+      {/* Market Context Story Cards */}
+      {recentEvents.length > 0 && (() => {
+        const categoryIcons: Record<string, string> = {
+          opec: '🛢️', hurricane: '🌀', sanctions: '⚠️', policy: '📋', other: '📰',
+        };
+        const stateStories: StoryCardData[] = recentEvents.slice(0, 3).map((evt: any) => ({
+          id: `state-event-${evt.id}`,
+          title: evt.title,
+          insight:
+            evt.impact === 'bullish' ? 'Upward price pressure expected' :
+            evt.impact === 'bearish' ? 'Downward price pressure expected' :
+            'Neutral market impact',
+          detail: evt.description,
+          category: 'event' as const,
+          icon: categoryIcons[evt.category] || '📰',
+          color: (evt.impact === 'bullish' ? 'red' : evt.impact === 'bearish' ? 'green' : 'slate') as StoryCardData['color'],
+          date: new Date(evt.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        }));
+
+        return (
+          <div>
+            <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">Recent Market Events</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {stateStories.map((story) => (
+                <StoryCard key={story.id} {...story} />
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Current Prices Table — All Grades */}
       {allGrades && allGrades.length > 0 ? (

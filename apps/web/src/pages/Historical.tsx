@@ -384,30 +384,32 @@ export default function Historical() {
         }
 
         return (
-          <ChartContainer
-            title="Price History"
-            subtitle={regionLabel}
-            height={450}
-            isLoading={isLoading}
-            isEmpty={chartData.length === 0}
-            emptyMessage="No data available for this region and time range"
-            actions={
-              <div className="text-xs text-slate-500 bg-slate-700 px-3 py-1 rounded">
-                {chartData.length} days
-              </div>
-            }
-          >
-            <PriceLineChart
-              data={chartData}
-              series={baseSeries}
+          <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
+            <ChartContainer
+              title="Price History"
+              subtitle={regionLabel}
               height={450}
-              yAxisLabel="Price ($/gal)"
-              tooltip={{
-                formatter: (value) => `$${(value as number).toFixed(3)}`,
-                labelFormatter: (label) => label,
-              }}
-            />
-          </ChartContainer>
+              isLoading={isLoading}
+              isEmpty={chartData.length === 0}
+              emptyMessage="No data available for this region and time range"
+              actions={
+                <div className="text-xs text-slate-500 bg-slate-700 px-3 py-1 rounded">
+                  {chartData.length} days
+                </div>
+              }
+            >
+              <PriceLineChart
+                data={chartData}
+                series={baseSeries}
+                height={450}
+                yAxisLabel="Price ($/gal)"
+                tooltip={{
+                  formatter: (value) => `$${(value as number).toFixed(3)}`,
+                  labelFormatter: (label) => label,
+                }}
+              />
+            </ChartContainer>
+          </div>
         );
       }, [activeFuels, showMovingAverage, chartData, isLoading, regionLabel])}
       

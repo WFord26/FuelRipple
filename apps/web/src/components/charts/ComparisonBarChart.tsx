@@ -88,6 +88,34 @@ export function ComparisonBarChart({
           {layout === 'horizontal' ? (
             <>
               <XAxis
+                dataKey={xAxisKey}
+                stroke="#94a3b8"
+                style={{ fontSize: '12px' }}
+                tick={{ fill: '#94a3b8' }}
+                tickFormatter={xAxisTickFormatter}
+                label={
+                  xAxisLabel
+                    ? { value: xAxisLabel, position: 'insideBottomRight', offset: -5 }
+                    : undefined
+                }
+              />
+              <YAxis
+                type="number"
+                stroke="#94a3b8"
+                style={{ fontSize: '12px' }}
+                tick={{ fill: '#94a3b8' }}
+                domain={yAxisDomain}
+                tickFormatter={yAxisTickFormatter}
+                label={
+                  yAxisLabel
+                    ? { value: yAxisLabel, angle: -90, position: 'insideLeft' }
+                    : undefined
+                }
+              />
+            </>
+          ) : (
+            <>
+              <XAxis
                 type="number"
                 stroke="#94a3b8"
                 style={{ fontSize: '12px' }}
@@ -110,34 +138,6 @@ export function ComparisonBarChart({
                 label={
                   xAxisLabel
                     ? { value: xAxisLabel, angle: -90, position: 'insideLeft' }
-                    : undefined
-                }
-              />
-            </>
-          ) : (
-            <>
-              <XAxis
-                dataKey={xAxisKey}
-                stroke="#94a3b8"
-                style={{ fontSize: '12px' }}
-                tick={{ fill: '#94a3b8' }}
-                tickFormatter={xAxisTickFormatter}
-                label={
-                  xAxisLabel
-                    ? { value: xAxisLabel, position: 'insideBottomRight', offset: -5 }
-                    : undefined
-                }
-              />
-              <YAxis
-                type="number"
-                stroke="#94a3b8"
-                style={{ fontSize: '12px' }}
-                tick={{ fill: '#94a3b8' }}
-                domain={yAxisDomain}
-                tickFormatter={yAxisTickFormatter}
-                label={
-                  yAxisLabel
-                    ? { value: yAxisLabel, angle: -90, position: 'insideLeft' }
                     : undefined
                 }
               />

@@ -13,6 +13,9 @@ interface ChartSkeletonProps {
  * Displays animated placeholder while data loads
  */
 export function ChartSkeleton({ height = 400, rows = 3 }: ChartSkeletonProps) {
+  // Deterministic widths based on row index for consistent snapshot testing
+  const widths = [90, 80, 85, 75, 95, 70, 88];
+  
   return (
     <div
       className="w-full bg-slate-800/50 rounded-lg overflow-hidden"
@@ -24,7 +27,7 @@ export function ChartSkeleton({ height = 400, rows = 3 }: ChartSkeletonProps) {
             key={i}
             className="h-2 bg-slate-700/50 rounded animate-pulse"
             style={{
-              width: `${85 + Math.random() * 15}%`,
+              width: `${widths[i % widths.length]}%`,
               animationDelay: `${i * 0.1}s`,
             }}
           />

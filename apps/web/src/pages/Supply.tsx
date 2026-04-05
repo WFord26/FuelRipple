@@ -166,13 +166,13 @@ export default function Supply() {
     staleTime: 60 * 60 * 1000,
   });
 
-  const { data: invData } = useQuery({
+  const { data: invData, isLoading: invLoading, isError: invError } = useQuery({
     queryKey: ['supplyInventories', invRegion, invWeeks],
     queryFn: () => getSupplyInventories(invRegion, invWeeks),
     staleTime: 60 * 60 * 1000,
   });
 
-  const { data: prodData } = useQuery({
+  const { data: prodData, isLoading: prodLoading, isError: prodError } = useQuery({
     queryKey: ['supplyProduction', 'US'],
     queryFn: () => getSupplyProduction('US', 52),
     staleTime: 60 * 60 * 1000,
@@ -286,14 +286,16 @@ export default function Supply() {
       </div>
 
       {/* ── Inventories Section ── */}
-      <ChartContainer
-        title="Petroleum Inventories"
-        subtitle="Weekly ending stocks in thousand barrels"
-        height={280}
-        isLoading={false}
-        isEmpty={invChartData.length === 0}
-        emptyMessage="No inventory data available"
-        actions={
+      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <ChartContainer
+          title="Petroleum Inventories"
+          subtitle="Weekly ending stocks in thousand barrels"
+          height={280}
+          isLoading={invLoading}
+          isError={invError}
+          isEmpty={!invLoading && invChartData.length === 0}
+          emptyMessage="No inventory data available"
+          actions={
           <div className="flex items-center gap-3">
             {/* Region selector */}
             <select
@@ -320,45 +322,52 @@ export default function Supply() {
           </div>
         }
       >
-        {invChartData.length > 0 && (
-          <UtilizationAreaChart
-            data={invChartData}
-            series={[
-              { key: 'gasoline', name: 'Gasoline Stocks', dataKey: 'gasoline', color: '#3b82f6' },
-              { key: 'distillate', name: 'Distillate Stocks', dataKey: 'distillate', color: '#a78bfa' },
-            ]}
-            xAxisKey="date"
-            yAxisTickFormatter={(v) => `${(v as number / 1000).toFixed(0)}M`}
-            tooltip={{
-              formatter: (val) => `${(val as number).toLocaleString()} Mbbl`,
-            }}
-          />
-        )}
-      </ChartContainer>
+          {invChartData.length > 0 && (
+            <UtilizationAreaChart
+              data={invChartData}
+              series={[
+                { key: 'gasoline', name: 'Gasoline Stocks', dataKey: 'gasoline', color: '#3b82f6' },
+                { key: 'distillate', name: 'Distillate Stocks', dataKey: 'distillate', color: '#a78bfa' },
+                { key: 'gasAvg', name: 'Gasoline 52w Avg', dataKey: 'gasAvg', color: '#60a5fa', stackId: undefined },
+              ]}
+              xAxisKey="date"
+              yAxisTickFormatter={(v) => `${(v as number / 1000).toFixed(0)}M`}
+              tooltip={{
+                formatter: (val) => `${(val as number).toLocaleString()} Mbbl`,
+              }}
+            />
+          )}
+        </ChartContainer>
+      </div>
 
       {/* ── Production Section ── */}
-      <ChartContainer
-        title="US Refinery Production"
-        subtitle="Weekly output in thousand barrels per day (MBBL/D)"
-        height={260}
-        isEmpty={prodChartData.length === 0}
-        emptyMessage="No production data available"
-      >
-        {prodChartData.length > 0 && (
-          <PriceLineChart
-            data={prodChartData}
-            series={[
-              { key: 'gasoline', name: 'Gasoline Prod.', dataKey: 'gasoline', color: '#22c55e' },
-              { key: 'distillate', name: 'Distillate Prod.', dataKey: 'distillate', color: '#f59e0b' },
-            ]}
-            xAxisKey="date"
-            yAxisTickFormatter={(v) => `${(v as number).toLocaleString()}`}
-            tooltip={{
-              formatter: (val) => `${(val as number).toLocaleString()} MBBL/D`,
-            }}
-          />
-        )}
-      </ChartContainer>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <ChartContainer
+          title="US Refinery Production"
+          subtitle="Weekly output in thousand barrels per day (MBBL/D)"
+          height={260}
+          isLoading={prodLoading}
+          isError={prodError}
+          isEmpty={!prodLoading && prodChartData.length === 0}
+          emptyMessage="No production data available"
+        >
+          {prodChartData.length > 0 && (
+            <PriceLineChart
+              data={prodChartData}
+              series={[
+                { key: 'gasoline', name: 'Gasoline Prod.', dataKey: 'gasoline', color: '#22c55e' },
+                { key: 'distillate', name: 'Distillate Prod.', dataKey: 'distillate', color: '#f59e0b' },
+                { key: 'gasAvg', name: 'Gasoline 4w Avg', dataKey: 'gasAvg', color: '#86efac', strokeWidth: 1 },
+              ]}
+              xAxisKey="date"
+              yAxisTickFormatter={(v) => `${(v as number).toLocaleString()}`}
+              tooltip={{
+                formatter: (val) => `${(val as number).toLocaleString()} MBBL/D`,
+              }}
+            />
+          )}
+        </ChartContainer>
+      </div>
 
       {/* ── Classifications Key ── */}
       <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">

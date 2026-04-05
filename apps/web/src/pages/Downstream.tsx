@@ -224,9 +224,9 @@ export default function Downstream() {
   }, [indicators]);
 
   // ── Latest indicator values with YoY ───────────────────────────────────────
-  const latestCpiYoY    = useMemo(() => indicators?.series.cpi.at(-1)?.yoy     ?? null, [indicators]);
-  const latestFoodYoY   = useMemo(() => indicators?.series.cpiFood.at(-1)?.yoy  ?? null, [indicators]);
-  const latestPpiTYoY   = useMemo(() => indicators?.series.ppiTrucking.at(-1)?.yoy ?? null, [indicators]);
+  const latestCpiYoY    = useMemo(() => indicators?.series.cpi[indicators.series.cpi.length - 1]?.yoy     ?? null, [indicators]);
+  const latestFoodYoY   = useMemo(() => indicators?.series.cpiFood[indicators.series.cpiFood.length - 1]?.yoy  ?? null, [indicators]);
+  const latestPpiTYoY   = useMemo(() => indicators?.series.ppiTrucking[indicators.series.ppiTrucking.length - 1]?.yoy ?? null, [indicators]);
 
   return (
     <div className="space-y-8">
@@ -362,7 +362,7 @@ export default function Downstream() {
             <IndicatorStat
               label="PPI Freight (YoY)"
               value={indicators.latest.ppiFreight?.value ?? null}
-              yoy={indicators?.series.ppiFreight?.at(-1)?.yoy ?? null}
+              yoy={indicators?.series.ppiFreight?.[indicators.series.ppiFreight.length - 1]?.yoy ?? null}
               description="FRED WPU3012 – monthly"
             />
           </div>

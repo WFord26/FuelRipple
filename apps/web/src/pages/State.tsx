@@ -14,7 +14,9 @@ import {
 import { PriceChart } from '../components/PriceChart';
 import { MetroHeatmap } from '../components/MetroHeatmap';
 import StoryCard, { StoryCardData } from '../components/StoryCard';
+import EventAnnotationControls from '../components/EventAnnotationControls';
 import { usePageSEO } from '../hooks/usePageSEO';
+import { eventToAnnotationMarker } from '../utils/eventAnnotations';
 
 // ── State → EIA duoarea code mapping ─────────────────────────────────────────
 // Keeping PADD mapping for regional reference, but no longer mapping to EIA regions
@@ -80,6 +82,7 @@ export default function State() {
   const padd = ABBR_TO_PADD[abbr];
   const [chartFuelType, setChartFuelType] = useState<'gas_regular' | 'diesel'>('gas_regular');
   const chartFuelLabel = chartFuelType === 'gas_regular' ? 'Regular Gasoline' : 'Diesel';
+  const [selectedEventCategories, setSelectedEventCategories] = useState<string[]>([]);
 
   usePageSEO({
     title: stateName ? `${stateName} Gas Prices` : 'State Gas Prices',
@@ -439,18 +442,34 @@ export default function State() {
             <div className="text-slate-400">Loading chart...</div>
           </div>
         ) : stateHistory && stateHistory.length > 0 ? (
-          <PriceChart
-            data={stateHistory
-              .map((d: any) => {
-                const grade = gradeMap[chartFuelType] as keyof typeof d;
-                return {
-                  time: d.time,
-                  value: d[grade],
-                };
-              })
-              .filter((d: any) => d.value != null)}
-            height={320}
-          />
+          <>
+            <EventAnnotationControls
+              events={recentEvents as any[]}
+              selectedCategories={selectedEventCategories}
+              onCategoryToggle={(cat) =>
+                setSelectedEventCategories(prev =>
+                  prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+                )
+              }
+              onReset={() => setSelectedEventCategories([])}
+            />
+            <PriceChart
+              data={stateHistory
+                .map((d: any) => {
+                  const grade = gradeMap[chartFuelType] as keyof typeof d;
+                  return {
+                    time: d.time,
+                    value: d[grade],
+                  };
+                })
+                .filter((d: any) => d.value != null)}
+              events={(selectedEventCategories.length > 0
+                ? (recentEvents as any[]).filter(e => selectedEventCategories.includes(e.category))
+                : (recentEvents as any[])
+              ).map(eventToAnnotationMarker)}
+              height={320}
+            />
+          </>
         ) : (
           <div className="flex justify-center items-center h-64">
             <p className="text-slate-400">

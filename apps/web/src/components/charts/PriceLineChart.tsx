@@ -18,6 +18,7 @@ import { ChartTooltip } from './ChartTooltip';
 
 export interface ChartReferenceLine {
   y?: number;
+  x?: string | number;
   label?: string;
   stroke?: string;
   strokeDasharray?: string;
@@ -140,6 +141,7 @@ export function PriceLineChart({
             <RechartsReferenceLine
               key={`ref-${idx}`}
               y={ref.y}
+              x={ref.x}
               stroke={ref.stroke ?? '#475569'}
               strokeWidth={ref.strokeWidth ?? 1}
               strokeDasharray={ref.strokeDasharray ?? '3 3'}
@@ -147,7 +149,7 @@ export function PriceLineChart({
                 ref.label
                   ? {
                       value: ref.label,
-                      position: 'insideBottomRight',
+                      position: ref.x !== undefined ? 'insideTopLeft' : 'insideBottomRight',
                       offset: 10,
                       fill: '#94a3b8',
                       fontSize: 11,

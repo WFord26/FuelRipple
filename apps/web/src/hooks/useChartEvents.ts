@@ -28,7 +28,7 @@ export function useChartEvents(
   // Filter events by selected categories
   const filteredEvents: ChartEvent[] = useMemo(() => {
     if (selectedCategories.length === 0) return events;
-    return events.filter(e => selectedCategories.includes(e.category));
+    return events.filter((e: ChartEvent) => selectedCategories.includes(e.category));
   }, [events, selectedCategories]);
 
   // Convert to annotation markers for charts

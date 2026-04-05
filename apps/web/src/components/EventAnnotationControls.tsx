@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { ChartEvent, getEventCategories, getEventStats } from '../utils/eventAnnotations';
 
 interface EventAnnotationControlsProps {

@@ -37,8 +37,9 @@ export const config: { [key: string]: Knex.Config } = {
       ? buildConnection(process.env.DATABASE_URL)
       : localFallback,
     pool: {
-      min: 2,
+      min: 0,
       max: 10,
+      acquireTimeoutMillis: 60000,
     },
   },
 
@@ -48,8 +49,9 @@ export const config: { [key: string]: Knex.Config } = {
       ? buildConnection(process.env.DATABASE_URL)
       : undefined,
     pool: {
-      min: 2,
+      min: 0,
       max: 20,
+      acquireTimeoutMillis: 60000,
     },
   },
 };

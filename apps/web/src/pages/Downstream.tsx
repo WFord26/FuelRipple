@@ -393,6 +393,10 @@ export default function Downstream() {
                   { key: 'ppiTrucking', name: 'PPI Truck Transport', color: '#f59e0b', dataKey: 'ppiTrucking' },
                   { key: 'ppiFreight', name: 'PPI Freight (commodity)', color: '#a78bfa', dataKey: 'ppiFreight' },
                 ]}
+                referenceLines={[
+                  { y: 0, label: '0% baseline', stroke: '#475569', strokeWidth: 1, strokeDasharray: '3 3' },
+                  { y: 2, label: 'Fed 2% target', stroke: '#10b981', strokeWidth: 1.5, strokeDasharray: '4 2' },
+                ]}
                 xAxisKey="month"
                 xAxisTickFormatter={(v) => v}
                 yAxisTickFormatter={(v) => `${v >= 0 ? '+' : ''}${(v as number).toFixed(0)}%`}

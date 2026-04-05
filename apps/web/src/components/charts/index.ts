@@ -19,7 +19,7 @@ export type { ChartContainerProps } from './ChartContainer';
 
 // Specialized chart components
 export { PriceLineChart } from './PriceLineChart';
-export type { PriceChartSeries, PriceLineChartProps } from './PriceLineChart';
+export type { PriceChartSeries, PriceLineChartProps, ChartReferenceLine } from './PriceLineChart';
 
 export { ComparisonBarChart } from './ComparisonBarChart';
 export type { BarChartSeries, ComparisonBarChartProps } from './ComparisonBarChart';

@@ -12,9 +12,17 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  ComposedChart,
+  ReferenceLine as RechartsReferenceLine,
 } from 'recharts';
 import { ChartTooltip } from './ChartTooltip';
+
+export interface ChartReferenceLine {
+  y?: number;
+  label?: string;
+  stroke?: string;
+  strokeDasharray?: string;
+  strokeWidth?: number;
+}
 
 export interface PriceChartSeries {
   key: string;
@@ -22,7 +30,6 @@ export interface PriceChartSeries {
   color: string;
   dataKey: string;
   strokeWidth?: number;
-  isArea?: boolean;
 }
 
 export interface PriceLineChartProps {
@@ -42,14 +49,14 @@ export interface PriceLineChartProps {
     formatter?: (value: any, name: string) => string | [string, string];
     labelFormatter?: (label: any) => string;
   };
-  onMouseMove?: (state: any) => void;
-  onMouseLeave?: () => void;
+  referenceLines?: ChartReferenceLine[];
   className?: string;
 }
 
 /**
  * Unified multi-series line chart component
  * Provides consistent styling, tooltips, and interactions
+ * For area charts, use UtilizationAreaChart instead
  */
 export function PriceLineChart({
   data,
@@ -65,18 +72,15 @@ export function PriceLineChart({
   xAxisTickFormatter,
   margin = { top: 5, right: 30, left: 0, bottom: 5 },
   tooltip,
+  referenceLines = [],
   className = '',
 }: PriceLineChartProps) {
-  const Chart = series.some(s => s.isArea) ? ComposedChart : RechartsLineChart;
-
   return (
     <div className={`w-full ${className}`} style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <Chart
+        <RechartsLineChart
           data={data}
           margin={margin}
-          onMouseMove={undefined}
-          onMouseLeave={undefined}
         >
           {showGrid && (
             <CartesianGrid
@@ -131,7 +135,28 @@ export function PriceLineChart({
               isAnimationActive={false}
             />
           ))}
-        </Chart>
+
+          {referenceLines.map((ref, idx) => (
+            <RechartsReferenceLine
+              key={`ref-${idx}`}
+              y={ref.y}
+              stroke={ref.stroke ?? '#475569'}
+              strokeWidth={ref.strokeWidth ?? 1}
+              strokeDasharray={ref.strokeDasharray ?? '3 3'}
+              label={
+                ref.label
+                  ? {
+                      value: ref.label,
+                      position: 'insideBottomRight',
+                      offset: 10,
+                      fill: '#94a3b8',
+                      fontSize: 11,
+                    }
+                  : false
+              }
+            />
+          ))}
+        </RechartsLineChart>
       </ResponsiveContainer>
     </div>
   );

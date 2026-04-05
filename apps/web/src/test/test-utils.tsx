@@ -1,5 +1,6 @@
 import React from 'react';
 import { render as rtlRender, RenderOptions } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';

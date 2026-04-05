@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import '@testing-library/jest-dom/vitest';
 import userEvent from '@testing-library/user-event';
 import { render, screen } from './test-utils';
 import StoryCard, { StoryCardData } from '../components/StoryCard';

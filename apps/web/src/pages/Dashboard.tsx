@@ -5,8 +5,10 @@ import DisruptionMeter from '../components/DisruptionMeter';
 import USPriceMap from '../components/USPriceMap';
 import ShareButtons from '../components/ShareButtons';
 import EmbedCodeGenerator from '../components/EmbedCodeGenerator';
+import StoryCard from '../components/StoryCard';
 import { usePageSEO } from '../hooks/usePageSEO';
 import { useDashboardFilters } from '../hooks/useDashboardFilters';
+import { useMarketStories } from '../hooks/useMarketStories';
 import { resolvePercentChange, toDisplayNumber } from '../lib/priceChange';
 
 const SUPPLY_CLR: Record<string, string> = {
@@ -135,6 +137,8 @@ export default function Dashboard() {
     staleTime: 24 * 60 * 60 * 1000,
   });
 
+  const stories = useMarketStories(fuelType, 'US');
+
   if (pricesLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -189,6 +193,22 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {/* Market Story Cards Rail */}
+      {stories && stories.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">Market Context & Events</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {stories.map((story) => (
+              <StoryCard
+                key={story.id}
+                {...story}
+                onAction={story.onAction || (() => {})}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* National Average — Dynamic based on fuel type */}
       <div>

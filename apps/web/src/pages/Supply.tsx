@@ -1,18 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { usePageSEO } from '../hooks/usePageSEO';
-import {
-  AreaChart,
-  Area,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
 import { format, parseISO } from 'date-fns';
 import {
   getSupplyHealth,
@@ -20,6 +8,7 @@ import {
   getSupplyInventories,
   getSupplyProduction,
 } from '../api/client';
+import { ChartContainer, UtilizationAreaChart, PriceLineChart } from '../components/charts';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -177,13 +166,13 @@ export default function Supply() {
     staleTime: 60 * 60 * 1000,
   });
 
-  const { data: invData } = useQuery({
+  const { data: invData, isLoading: invLoading, isError: invError } = useQuery({
     queryKey: ['supplyInventories', invRegion, invWeeks],
     queryFn: () => getSupplyInventories(invRegion, invWeeks),
     staleTime: 60 * 60 * 1000,
   });
 
-  const { data: prodData } = useQuery({
+  const { data: prodData, isLoading: prodLoading, isError: prodError } = useQuery({
     queryKey: ['supplyProduction', 'US'],
     queryFn: () => getSupplyProduction('US', 52),
     staleTime: 60 * 60 * 1000,
@@ -297,12 +286,16 @@ export default function Supply() {
       </div>
 
       {/* ── Inventories Section ── */}
-      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-          <div>
-            <h3 className="text-lg font-semibold text-white">Petroleum Inventories</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Weekly ending stocks in thousand barrels</p>
-          </div>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <ChartContainer
+          title="Petroleum Inventories"
+          subtitle="Weekly ending stocks in thousand barrels"
+          height={280}
+          isLoading={invLoading}
+          isError={invError}
+          isEmpty={!invLoading && invChartData.length === 0}
+          emptyMessage="No inventory data available"
+          actions={
           <div className="flex items-center gap-3">
             {/* Region selector */}
             <select
@@ -327,105 +320,53 @@ export default function Supply() {
               <option value={104}>2 Years</option>
             </select>
           </div>
-        </div>
-
-        {invChartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={invChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-              <defs>
-                <linearGradient id="gasGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.03} />
-                </linearGradient>
-                <linearGradient id="distGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#a78bfa" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#a78bfa" stopOpacity={0.03} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis
-                dataKey="date"
-                tick={{ fill: '#94a3b8', fontSize: 11 }}
-                tickLine={false}
-                axisLine={{ stroke: '#334155' }}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                tick={{ fill: '#94a3b8', fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={v => `${(v / 1000).toFixed(0)}M`}
-                width={48}
-              />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                labelStyle={{ color: '#94a3b8', fontSize: 12 }}
-                itemStyle={{ fontSize: 12 }}
-                formatter={(val: any, name: string) => [
-                  `${Number(val).toLocaleString()} Mbbl`,
-                  name === 'gasoline' ? 'Gasoline' : name === 'distillate' ? 'Distillate' : '52w Avg',
-                ]}
-              />
-              <Legend
-                formatter={(val) => val === 'gasoline' ? 'Gasoline Stocks' : val === 'distillate' ? 'Distillate Stocks' : '52w Avg (Gas)'}
-                wrapperStyle={{ fontSize: 12, color: '#94a3b8' }}
-              />
-              <Area type="monotone" dataKey="gasoline"   stroke="#3b82f6" fill="url(#gasGrad)"  strokeWidth={2} dot={false} />
-              <Area type="monotone" dataKey="distillate" stroke="#a78bfa" fill="url(#distGrad)" strokeWidth={2} dot={false} />
-              <Line  type="monotone" dataKey="gasAvg"    stroke="#3b82f6" strokeWidth={1} strokeDasharray="4 4" dot={false} legendType="none" />
-            </AreaChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="flex items-center justify-center h-64 text-slate-500">No inventory data available</div>
-        )}
+        }
+      >
+          {invChartData.length > 0 && (
+            <UtilizationAreaChart
+              data={invChartData}
+              series={[
+                { key: 'gasoline', name: 'Gasoline Stocks', dataKey: 'gasoline', color: '#3b82f6' },
+                { key: 'distillate', name: 'Distillate Stocks', dataKey: 'distillate', color: '#a78bfa' },
+                { key: 'gasAvg', name: 'Gasoline 52w Avg', dataKey: 'gasAvg', color: '#60a5fa', stackId: undefined },
+              ]}
+              xAxisKey="date"
+              yAxisTickFormatter={(v) => `${(v as number / 1000).toFixed(0)}M`}
+              tooltip={{
+                formatter: (val) => `${(val as number).toLocaleString()} Mbbl`,
+              }}
+            />
+          )}
+        </ChartContainer>
       </div>
 
       {/* ── Production Section ── */}
-      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-white">US Refinery Production</h3>
-          <p className="text-xs text-slate-400 mt-0.5">Weekly output in thousand barrels per day (MBBL/D)</p>
-        </div>
-
-        {prodChartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={prodChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis
-                dataKey="date"
-                tick={{ fill: '#94a3b8', fontSize: 11 }}
-                tickLine={false}
-                axisLine={{ stroke: '#334155' }}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                tick={{ fill: '#94a3b8', fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                width={52}
-                tickFormatter={v => `${v.toLocaleString()}`}
-              />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                labelStyle={{ color: '#94a3b8', fontSize: 12 }}
-                itemStyle={{ fontSize: 12 }}
-                formatter={(val: any, name: string) => [
-                  `${Number(val).toLocaleString()} MBBL/D`,
-                  name === 'gasoline' ? 'Gasoline' : name === 'distillate' ? 'Distillate' : '4w Avg (Gas)',
-                ]}
-              />
-              <Legend
-                formatter={val => val === 'gasoline' ? 'Gasoline Prod.' : val === 'distillate' ? 'Distillate Prod.' : '4w Avg (Gas)'}
-                wrapperStyle={{ fontSize: 12, color: '#94a3b8' }}
-              />
-              <Line type="monotone" dataKey="gasoline"   stroke="#22c55e" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="distillate" stroke="#f59e0b" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="gasAvg"     stroke="#22c55e" strokeWidth={1} strokeDasharray="4 4" dot={false} legendType="none" />
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="flex items-center justify-center h-64 text-slate-500">No production data available</div>
-        )}
+      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <ChartContainer
+          title="US Refinery Production"
+          subtitle="Weekly output in thousand barrels per day (MBBL/D)"
+          height={260}
+          isLoading={prodLoading}
+          isError={prodError}
+          isEmpty={!prodLoading && prodChartData.length === 0}
+          emptyMessage="No production data available"
+        >
+          {prodChartData.length > 0 && (
+            <PriceLineChart
+              data={prodChartData}
+              series={[
+                { key: 'gasoline', name: 'Gasoline Prod.', dataKey: 'gasoline', color: '#22c55e' },
+                { key: 'distillate', name: 'Distillate Prod.', dataKey: 'distillate', color: '#f59e0b' },
+                { key: 'gasAvg', name: 'Gasoline 4w Avg', dataKey: 'gasAvg', color: '#86efac', strokeWidth: 1 },
+              ]}
+              xAxisKey="date"
+              yAxisTickFormatter={(v) => `${(v as number).toLocaleString()}`}
+              tooltip={{
+                formatter: (val) => `${(val as number).toLocaleString()} MBBL/D`,
+              }}
+            />
+          )}
+        </ChartContainer>
       </div>
 
       {/* ── Classifications Key ── */}

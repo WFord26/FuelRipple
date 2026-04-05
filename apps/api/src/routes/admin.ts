@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { dataQueue } from '../services/jobQueue';
 import { clearCache } from '../services/cache';
+import { getKnex } from '@fuelripple/db';
 
 const router = Router();
 
@@ -81,6 +82,48 @@ router.post('/flush-cache', async (req, res) => {
   } catch (error) {
     console.error('Error flushing cache:', error);
     res.status(500).json({ error: 'Failed to flush cache' });
+  }
+});
+
+/**
+ * POST /api/v1/admin/rebuild-snapshot
+ * Repopulate the latest_prices snapshot table from current energy_prices data.
+ * Use when latest_prices is stale due to a failed job.
+ */
+router.post('/rebuild-snapshot', async (req, res) => {
+  try {
+    const knex = getKnex();
+
+    // Get the most recent row per (metric, region) from energy_prices
+    const latest = await knex('energy_prices as ep')
+      .join(
+        knex('energy_prices')
+          .select('metric', 'region')
+          .max('time as max_time')
+          .groupBy('metric', 'region')
+          .as('mx'),
+        function () {
+          this.on('ep.metric', 'mx.metric')
+            .andOn('ep.region', 'mx.region')
+            .andOn('ep.time', 'mx.max_time');
+        }
+      )
+      .select('ep.metric', 'ep.region', 'ep.value', 'ep.time', 'ep.source');
+
+    if (latest.length === 0) {
+      return res.status(404).json({ error: 'No data in energy_prices' });
+    }
+
+    // Upsert all into latest_prices
+    await knex('latest_prices')
+      .insert(latest)
+      .onConflict(['region', 'metric'])
+      .merge(['value', 'time', 'source']);
+
+    res.json({ message: 'Snapshot rebuilt successfully', rows: latest.length });
+  } catch (error) {
+    console.error('Error rebuilding snapshot:', error);
+    res.status(500).json({ error: 'Failed to rebuild snapshot' });
   }
 });
 

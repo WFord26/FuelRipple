@@ -21,6 +21,7 @@ import {
   getCorrelationPriceSeries, getEvents, getDailyCrudePrices,
 } from '../api/client';
 import { CorrelationTooltip } from '../components/charts';
+import StoryCard, { StoryCardData } from '../components/StoryCard';
 
 // ── Event category config ─────────────────────────────────────────────────────
 
@@ -492,6 +493,62 @@ export default function Correlation() {
   const hasCorr = !corrLoading && !corrError && crossCorr.length > 0;
   const hasRf   = !rfLoading  && !rfError  && asymmetryRatio > 0;
 
+  // Build story cards from correlation insights
+  const correlationStories: StoryCardData[] = useMemo(() => {
+    const stories: StoryCardData[] = [];
+
+    if (hasCorr) {
+      const corrClassification = classifyCorrelation(optimalR);
+      const corrColor: StoryCardData['color'] =
+        Math.abs(optimalR) >= 0.85 ? 'blue' :
+        Math.abs(optimalR) >= 0.70 ? 'green' :
+        Math.abs(optimalR) >= 0.50 ? 'slate' : 'amber';
+
+      stories.push({
+        id: 'corr-strength',
+        title: `${corrClassification} Correlation`,
+        insight: `WTI crude leads pump prices by ${optimalLag} ${optimalLag === 1 ? 'week' : 'weeks'}`,
+        detail: `Pearson r = ${optimalR.toFixed(3)} — ${corrClassification.toLowerCase()} relationship between WTI crude and retail pump prices`,
+        category: 'correlation',
+        icon: '📈',
+        color: corrColor,
+      });
+    }
+
+    if (hasRf) {
+      const isAsymmetric = asymmetryRatio > 1.2;
+      stories.push({
+        id: 'corr-rockets-feathers',
+        title: 'Rockets & Feathers',
+        insight: isAsymmetric
+          ? `Prices rise ${asymmetryRatio.toFixed(1)}× faster than they fall`
+          : 'Symmetric price adjustment detected',
+        detail: `Rising prices pass through in ~${riseHalfLifeWeeks.toFixed(1)} weeks; falling prices in ~${fallHalfLifeWeeks.toFixed(1)} weeks`,
+        category: 'market',
+        icon: isAsymmetric ? '🚀' : '⚖️',
+        color: isAsymmetric ? 'amber' : 'green',
+      });
+    }
+
+    // Most recent event as context
+    if (events.length > 0) {
+      const latestEvent = events[0];
+      const eventCfg = EVENT_CATEGORIES[latestEvent.category] || EVENT_CATEGORIES.other;
+      stories.push({
+        id: `corr-event-${latestEvent.id}`,
+        title: latestEvent.title,
+        insight: `${eventCfg.label} event: check chart overlay for price impact`,
+        detail: latestEvent.description,
+        category: 'event',
+        icon: eventCfg.emoji,
+        color: 'slate',
+        date: new Date(latestEvent.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      });
+    }
+
+    return stories;
+  }, [hasCorr, hasRf, optimalR, optimalLag, asymmetryRatio, riseHalfLifeWeeks, fallHalfLifeWeeks, events]);
+
   return (
     <div className="space-y-8">
       {/* ── Header ── */}
@@ -545,6 +602,18 @@ export default function Correlation() {
           ))}
         </div>
       </div>
+
+      {/* ── Correlation context and event story cards ── */}
+      {correlationStories.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">Correlation Context</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {correlationStories.map((story) => (
+              <StoryCard key={story.id} {...story} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Dual-axis price chart with event overlays ── */}
       <section className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">

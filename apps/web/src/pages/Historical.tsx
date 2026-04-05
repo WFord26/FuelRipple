@@ -1,6 +1,6 @@
 ﻿import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getAaaNationalHistory, getAaaStateHistory, getAaaPaddHistory } from '../api/client';
+import { getAaaNationalHistory, getAaaStateHistory, getAaaPaddHistory, getEvents } from '../api/client';
 import { usePageSEO } from '../hooks/usePageSEO';
 import { ChartContainer, PriceLineChart, type PriceChartSeries } from '../components/charts';
 
@@ -115,6 +115,14 @@ export default function Historical() {
   const [selectedState, setSelectedState] = useState('CA');
   const [showMovingAverage, setShowMovingAverage] = useState(false);
   const [showEvents, setShowEvents] = useState(false);
+
+  // Fetch market events for chart overlay
+  const { data: allEvents = [] } = useQuery({
+    queryKey: ['historicalEvents'],
+    queryFn: () => getEvents(),
+    staleTime: 60 * 60 * 1000, // 1 hour
+    enabled: showEvents,
+  });
 
   const selectedRange = TIME_RANGES.find(r => r.value === timeRange);
   const limit = Math.ceil((selectedRange?.days || 365) * 1.5); // AAA API limit
@@ -407,6 +415,22 @@ export default function Historical() {
                   formatter: (value) => `$${(value as number).toFixed(3)}`,
                   labelFormatter: (label) => label,
                 }}
+                referenceLines={showEvents ? allEvents.map((evt: any) => {
+                  // Find nearest chart data point to the event date
+                  const eventTs = new Date(evt.event_date).getTime();
+                  const nearest = chartData.reduce((best: any, cur: any) => {
+                    const curTs = new Date(cur.timeRaw || cur.time).getTime();
+                    const bestTs = best ? new Date(best.timeRaw || best.time).getTime() : Infinity;
+                    return Math.abs(curTs - eventTs) < Math.abs(bestTs - eventTs) ? cur : best;
+                  }, null);
+                  return {
+                    x: nearest?.time,
+                    label: evt.title.length > 20 ? evt.title.slice(0, 20) + '…' : evt.title,
+                    stroke: evt.impact === 'bullish' ? '#ef4444' : evt.impact === 'bearish' ? '#22c55e' : '#64748b',
+                    strokeWidth: 1,
+                    strokeDasharray: '4 2',
+                  };
+                }) : []}
               />
             </ChartContainer>
           </div>

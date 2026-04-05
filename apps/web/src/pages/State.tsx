@@ -9,10 +9,14 @@ import {
   getStatePrice,
   getTypicalImpact,
   getAaaMetrosLatest,
+  getEvents,
 } from '../api/client';
 import { PriceChart } from '../components/PriceChart';
 import { MetroHeatmap } from '../components/MetroHeatmap';
+import StoryCard, { StoryCardData } from '../components/StoryCard';
+import EventAnnotationControls from '../components/EventAnnotationControls';
 import { usePageSEO } from '../hooks/usePageSEO';
+import { eventToAnnotationMarker } from '../utils/eventAnnotations';
 
 // ── State → EIA duoarea code mapping ─────────────────────────────────────────
 // Keeping PADD mapping for regional reference, but no longer mapping to EIA regions
@@ -78,6 +82,7 @@ export default function State() {
   const padd = ABBR_TO_PADD[abbr];
   const [chartFuelType, setChartFuelType] = useState<'gas_regular' | 'diesel'>('gas_regular');
   const chartFuelLabel = chartFuelType === 'gas_regular' ? 'Regular Gasoline' : 'Diesel';
+  const [selectedEventCategories, setSelectedEventCategories] = useState<string[]>([]);
 
   usePageSEO({
     title: stateName ? `${stateName} Gas Prices` : 'State Gas Prices',
@@ -132,6 +137,13 @@ export default function State() {
     queryKey: ['metrosLatest', abbr],
     queryFn: () => getAaaMetrosLatest(abbr),
     enabled: !!stateName,
+  });
+
+  // Recent market events for context
+  const { data: recentEvents = [] } = useQuery({
+    queryKey: ['stateEvents'],
+    queryFn: () => getEvents(),
+    staleTime: 60 * 60 * 1000,
   });
 
   // Extract all prices from AAA data
@@ -214,6 +226,37 @@ export default function State() {
           </p>
         </div>
       </div>
+
+      {/* Market Context Story Cards */}
+      {recentEvents.length > 0 && (() => {
+        const categoryIcons: Record<string, string> = {
+          opec: '🛢️', hurricane: '🌀', sanctions: '⚠️', policy: '📋', other: '📰',
+        };
+        const stateStories: StoryCardData[] = recentEvents.slice(0, 3).map((evt: any) => ({
+          id: `state-event-${evt.id}`,
+          title: evt.title,
+          insight:
+            evt.impact === 'bullish' ? 'Upward price pressure expected' :
+            evt.impact === 'bearish' ? 'Downward price pressure expected' :
+            'Neutral market impact',
+          detail: evt.description,
+          category: 'event' as const,
+          icon: categoryIcons[evt.category] || '📰',
+          color: (evt.impact === 'bullish' ? 'red' : evt.impact === 'bearish' ? 'green' : 'slate') as StoryCardData['color'],
+          date: new Date(evt.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        }));
+
+        return (
+          <div>
+            <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">Recent Market Events</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {stateStories.map((story) => (
+                <StoryCard key={story.id} {...story} />
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Current Prices Table — All Grades */}
       {allGrades && allGrades.length > 0 ? (
@@ -399,18 +442,34 @@ export default function State() {
             <div className="text-slate-400">Loading chart...</div>
           </div>
         ) : stateHistory && stateHistory.length > 0 ? (
-          <PriceChart
-            data={stateHistory
-              .map((d: any) => {
-                const grade = gradeMap[chartFuelType] as keyof typeof d;
-                return {
-                  time: d.time,
-                  value: d[grade],
-                };
-              })
-              .filter((d: any) => d.value != null)}
-            height={320}
-          />
+          <>
+            <EventAnnotationControls
+              events={recentEvents as any[]}
+              selectedCategories={selectedEventCategories}
+              onCategoryToggle={(cat) =>
+                setSelectedEventCategories(prev =>
+                  prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+                )
+              }
+              onReset={() => setSelectedEventCategories([])}
+            />
+            <PriceChart
+              data={stateHistory
+                .map((d: any) => {
+                  const grade = gradeMap[chartFuelType] as keyof typeof d;
+                  return {
+                    time: d.time,
+                    value: d[grade],
+                  };
+                })
+                .filter((d: any) => d.value != null)}
+              events={(selectedEventCategories.length > 0
+                ? (recentEvents as any[]).filter(e => selectedEventCategories.includes(e.category))
+                : (recentEvents as any[])
+              ).map(eventToAnnotationMarker)}
+              height={320}
+            />
+          </>
         ) : (
           <div className="flex justify-center items-center h-64">
             <p className="text-slate-400">

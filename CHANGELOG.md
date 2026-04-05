@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Story cards and event-aware annotations** (issue #14) — reusable narrative context layer across dashboard, state, and correlation surfaces:
+  - **`StoryCard` component** (`apps/web/src/components/StoryCard.tsx`) — card component with icon, category badge, insight text, optional detail line, optional action button, and color variants (`blue`, `amber`, `red`, `green`, `slate`); fully accessible via `role="article"`
+  - **`useMarketStories` hook** (`apps/web/src/hooks/useMarketStories.ts`) — derives up to 5 structured story cards from live event, volatility, and disruption data; maps event category and impact to icon, color, and narrative text automatically
+  - **`EventAnnotationControls` component** (`apps/web/src/components/EventAnnotationControls.tsx`) — category filter pill bar that filters which event categories appear as chart overlays; shows event counts per category and a "Clear filters" reset
+  - **`useChartEvents` hook** (`apps/web/src/hooks/useChartEvents.ts`) — fetches events for a given date range, filters by selected categories, and converts them to `AnnotationMarker` objects ready for chart consumption
+  - **`eventAnnotations` utility** (`apps/web/src/utils/eventAnnotations.ts`) — pure functions: `eventToAnnotationMarker`, `filterEventsByCategory`, `getEventCategories`, `getEventStats`
+  - **Dashboard story rail** (`apps/web/src/pages/Dashboard.tsx`) — 3-column responsive grid of story cards rendered above the national average table; cards sourced from the `useMarketStories` hook
+  - **Correlation story cards** (`apps/web/src/pages/Correlation.tsx`) — 3-card rail below the page intro: correlation strength card, rockets-and-feathers asymmetry card, and latest event card; all computed from live data via `useMemo`
+  - **State page story cards and annotations** (`apps/web/src/pages/State.tsx`) — 3-card "Recent Market Events" rail near the top of every state page; price history chart now shows event annotations with per-category filter controls via `EventAnnotationControls`
+  - **Historical chart event annotations** (`apps/web/src/pages/Historical.tsx`) — the existing "Show Events" toggle now fetches live event data and renders color-coded vertical reference lines (red = bullish/price-up, green = bearish/price-down, gray = neutral) on the price history chart
+  - **`PriceLineChart` vertical reference lines** (`apps/web/src/components/charts/PriceLineChart.tsx`) — `ChartReferenceLine` interface extended with an `x` property for vertical (x-axis) reference lines; label position adapts automatically between horizontal and vertical orientations
+  - **`StoryCard` unit tests** (`apps/web/src/test/StoryCard.test.tsx`) — 12 tests covering rendering, category badges, action button presence and click behavior
+
 - **Dashboard URL filter state** (`apps/web/src/hooks/useDashboardFilters.ts`) — new `useDashboardFilters()` hook that persists all dashboard filters (`fuel`, `region`, `timerange`, `compare`, `overlay`) in the URL search params:
   - Filter selections survive page refresh and can be shared via link
   - Only non-default values are written to the URL to keep links clean

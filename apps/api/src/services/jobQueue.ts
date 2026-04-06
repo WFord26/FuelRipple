@@ -31,22 +31,29 @@ export function initializeJobQueue(): void {
   if (isCluster) {
     console.log('🔄 Detected Azure Redis Enterprise cluster (port 10000), using Cluster client');
     
+    // Azure Redis Enterprise cluster nodes return internal IPs/ports that aren't accessible.
+    // Use natMap to redirect all cluster node connections back through the public proxy.
+    const publicEndpoint = { host: redis.options.host!, port: redis.options.port! };
+    
     // Create a Cluster client for Azure Redis Enterprise
     bullmqConnection = new Cluster(
-      [{ 
-        host: redis.options.host!, 
-        port: redis.options.port! 
-      }],
+      [publicEndpoint],
       {
         redisOptions: {
           password: redis.options.password,
           username: redis.options.username,
           tls: redis.options.tls,
         },
+        // Map all cluster node addresses to the public endpoint proxy
+        natMap: {
+          // Redirect any cluster node IP:port back to the public endpoint
+          '*:*': publicEndpoint,
+        },
         // Disable automatic cluster refresh since Azure manages cluster topology
         enableAutoPipelining: false,
         enableReadyCheck: false,
-        // Retry strategy for cluster MOVED redirects
+        slotsRefreshTimeout: 10000,
+        // Retry strategy for cluster operations
         clusterRetryStrategy: (times) => {
           if (times > 3) return null; // Give up after 3 retries
           return Math.min(100 * times, 2000); // Exponential backoff

@@ -27,7 +27,8 @@ import * as dotenv from 'dotenv';
 // Load .env from monorepo root (two levels up from apps/api)
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
-import { insertPrices, refreshMaterializedViews, closeConnection } from '@fuelripple/db';
+import { insertPrices, refreshMaterializedViews, closeConnection, getKnex, upsertNationalAverages, upsertStateAggregates } from '@fuelripple/db';
+import type { AaaNationalAverageRow, AaaStateAggregateRow } from '@fuelripple/db';
 import { EnergyPrice } from '@fuelripple/shared';
 import { abbrToDuoarea } from '../utils/regionMapper';
 
@@ -196,10 +197,119 @@ async function main() {
   await refreshMaterializedViews();
 
   console.log();
+  console.log('→ Computing US national averages from imported state data ...');
+  await computeNationalAverages(sortedDates[0], sortedDates[sortedDates.length - 1]);
+
+  console.log();
   console.log('✓ Import complete!');
   console.log(`  ${inserted.toLocaleString()} records written (duplicates auto-skipped).`);
 
   await closeConnection();
+}
+
+/**
+ * Compute and upsert US national averages from AAA state-level data
+ * for the given date range. Inserts into both energy_prices (for time-series queries)
+ * and aaa_national_averages (for dashboard display).
+ */
+async function computeNationalAverages(startDate: string, endDate: string): Promise<void> {
+  const knex = getKnex();
+
+  // Get all unique dates with state data in the range
+  const dates = await knex('aaa_state_aggregates')
+    .select('time')
+    .whereBetween('time', [startDate, endDate])
+    .groupBy('time')
+    .orderBy('time', 'asc');
+
+  if (dates.length === 0) {
+    console.log('  ⚠️  No state-level AAA data found in date range.');
+    return;
+  }
+
+  const nationalAverages: AaaNationalAverageRow[] = [];
+  const energyPrices: EnergyPrice[] = [];
+
+  for (const { time } of dates) {
+    const stateData = await knex('aaa_state_aggregates')
+      .select('*')
+      .where('time', time);
+
+    if (stateData.length === 0) continue;
+
+    const avg = (vals: (number | null)[]) => {
+      const filtered = vals.filter((v): v is number => v !== null);
+      return filtered.length > 0 ? filtered.reduce((a, b) => a + b, 0) / filtered.length : null;
+    };
+
+    const regulars = stateData.map(s => s.regular);
+    const midGrades = stateData.map(s => s.mid_grade);
+    const premiums = stateData.map(s => s.premium);
+    const diesels = stateData.map(s => s.diesel);
+
+    const regular = avg(regulars);
+    const midGrade = avg(midGrades);
+    const premium = avg(premiums);
+    const diesel = avg(diesels);
+
+    // Insert into aaa_national_averages table
+    nationalAverages.push({
+      time: new Date(time),
+      regular,
+      mid_grade: midGrade,
+      premium,
+      diesel,
+      state_count: stateData.length,
+    });
+
+    // Also insert into energy_prices for time-series queries and disruption score
+    if (regular !== null) {
+      energyPrices.push({
+        time: new Date(time),
+        source: 'aaa',
+        metric: 'gas_regular',
+        region: 'US',
+        value: regular,
+        unit: 'usd_per_gallon',
+      });
+    }
+    if (midGrade !== null) {
+      energyPrices.push({
+        time: new Date(time),
+        source: 'aaa',
+        metric: 'gas_midgrade',
+        region: 'US',
+        value: midGrade,
+        unit: 'usd_per_gallon',
+      });
+    }
+    if (premium !== null) {
+      energyPrices.push({
+        time: new Date(time),
+        source: 'aaa',
+        metric: 'gas_premium',
+        region: 'US',
+        value: premium,
+        unit: 'usd_per_gallon',
+      });
+    }
+    if (diesel !== null) {
+      energyPrices.push({
+        time: new Date(time),
+        source: 'aaa',
+        metric: 'diesel',
+        region: 'US',
+        value: diesel,
+        unit: 'usd_per_gallon',
+      });
+    }
+  }
+
+  if (nationalAverages.length > 0) {
+    await upsertNationalAverages(nationalAverages);
+    await insertPrices(energyPrices);
+    console.log(`  ✅ Computed ${nationalAverages.length} national averages, inserted ${energyPrices.length} energy_prices rows`);
+  }
 }
 
 main().catch(async (err) => {

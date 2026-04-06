@@ -21,6 +21,7 @@
     "download-crude": "tsx --env-file=../../.env src/scripts/download-crude.ts",
     "scrape-aaa": "tsx src/scripts/scrape-aaa-history.ts",
     "import-aaa": "tsx --env-file=../../.env src/scripts/import-aaa-csv.ts",
+    "compute-aaa-national": "tsx --env-file=../../.env src/scripts/compute-aaa-national.ts",
     "backfill-aaa-wayback": "tsx --env-file=../../.env src/scripts/backfill-aaa-wayback.ts"
   },
   "dependencies": {

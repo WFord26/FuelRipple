@@ -23,20 +23,18 @@ export function initializeJobQueue(): void {
     return;
   }
 
-  // Azure Redis with clustering enabled uses a PROXY model, not true Redis Cluster.
-  // Use a regular Redis client (not Cluster) and let Azure's proxy handle routing.
-  // The showFriendlyErrorStack option helps debug connection issues.
+  // Create queue with redis connection
+  // Pass all connection options (host, port, password, tls) so BullMQ's
+  // bundled ioredis connects correctly to TLS-only providers like Upstash.
   bullmqConnOpts = {
     host: redis.options.host,
     port: redis.options.port,
-    password: redis.options.password,
-    username: redis.options.username,
-    tls: redis.options.tls,
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-    enableOfflineQueue: false,
-    showFriendlyErrorStack: true,
+    maxRetriesPerRequest: null, // required by BullMQ
+    enableReadyCheck: false,    // required for Azure Redis Cluster
   };
+  if (redis.options.password) bullmqConnOpts.password = redis.options.password;
+  if (redis.options.username) bullmqConnOpts.username = redis.options.username;
+  if (redis.options.tls) bullmqConnOpts.tls = redis.options.tls;
 
   dataQueue = new Queue('data-ingestion', { connection: bullmqConnOpts, prefix: '{bull}' });
 

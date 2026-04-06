@@ -6,7 +6,7 @@ param projectName = 'fuelripple-wford'
 param apiImageTag = 'latest'
 param webImageTag = 'latest'
 param appServiceSkuName = 'B1'
-param enableRedis = false
+param enableRedis = true
 param enableFrontDoor = true
 
 // Alert notifications

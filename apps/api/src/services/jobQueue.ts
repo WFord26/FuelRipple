@@ -1,4 +1,5 @@
 import { Queue, Worker } from 'bullmq';
+import { Cluster } from 'ioredis';
 import { clearCache, redis } from './cache';
 import { fetchAllGasPrices, fetchDieselPrices, fetchRefineryUtilization, fetchRefineryProduction, fetchPetroleumStocks, fetchPetroleumImports, fetchFlowBalance, fetchRefineryCapacity820 } from './eiaClient';
 import { fetchCrudeQuotes } from './marketClient';
@@ -12,7 +13,7 @@ import { trackApiEvent, trackApiException, trackMetric } from '../lib/appInsight
 import { assertAAAScrapeHealthy, summarizeAAAScrape } from './aaaIngestion';
 
 export let dataQueue: Queue | null = null;
-let bullmqConnOpts: Record<string, any> | null = null;
+let redisCluster: Cluster | null = null;
 
 /**
  * Initialize BullMQ job queue
@@ -23,25 +24,26 @@ export function initializeJobQueue(): void {
     return;
   }
 
-  // Create queue with redis connection
-  // Pass all connection options (host, port, password, tls) so BullMQ's
-  // bundled ioredis connects correctly to TLS-only providers or cluster mode
-  bullmqConnOpts = {
-    host: redis.options.host,
-    port: redis.options.port,
-    maxRetriesPerRequest: null,     // required by BullMQ
-    enableReadyCheck: false,        // required for Azure Redis
-    enableCluster: true,            // enable cluster mode to handle MOVED redirects from Azure Redis
-    enableOfflineQueue: false,      // handle offline gracefully
-    dnsLookup: (address: string, callback: any) => require('dns').lookup(address, 4, callback), // support DNS for Azure endpoints
-  };
-  if (redis.options.password) bullmqConnOpts.password = redis.options.password;
-  if (redis.options.username) bullmqConnOpts.username = redis.options.username;
-  if (redis.options.tls) bullmqConnOpts.tls = redis.options.tls;
+  // For Azure Redis cluster mode, create a Cluster client that follows MOVED redirects
+  // BullMQ requires a cluster client (not regular Redis with enableCluster flag)
+  redisCluster = new Cluster(
+    [{ host: redis.options.host!, port: redis.options.port! }],
+    {
+      redisOptions: {
+        password: redis.options.password,
+        username: redis.options.username,
+        tls: redis.options.tls,
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+      },
+      dnsLookup: (address: string, callback: any) => require('dns').lookup(address, 4, callback),
+      enableOfflineQueue: false,
+    }
+  );
 
-  dataQueue = new Queue('data-ingestion', { connection: bullmqConnOpts, prefix: '{bull}' });
+  dataQueue = new Queue('data-ingestion', { connection: redisCluster, prefix: '{bull}' });
 
-  console.log('✅ Job queue initialized');
+  console.log('✅ Job queue initialized with Redis cluster mode');
 
   // Schedule jobs
   scheduleJobs();
@@ -203,7 +205,7 @@ async function scheduleJobs(): Promise<void> {
  * Create workers to process jobs
  */
 function createWorkers(): void {
-  if (!redis) return;
+  if (!redisCluster) return;
 
   const worker = new Worker(
     'data-ingestion',
@@ -249,7 +251,7 @@ function createWorkers(): void {
       }
     },
     {
-      connection: bullmqConnOpts!,
+      connection: redisCluster,
       prefix: '{bull}',
       concurrency: 3,
       maxStalledCount: 3,

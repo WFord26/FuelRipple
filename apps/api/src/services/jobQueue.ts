@@ -25,12 +25,15 @@ export function initializeJobQueue(): void {
 
   // Create queue with redis connection
   // Pass all connection options (host, port, password, tls) so BullMQ's
-  // bundled ioredis connects correctly to TLS-only providers like Upstash.
+  // bundled ioredis connects correctly to TLS-only providers or cluster mode
   bullmqConnOpts = {
     host: redis.options.host,
     port: redis.options.port,
-    maxRetriesPerRequest: null, // required by BullMQ
-    enableReadyCheck: false,    // required for Azure Redis Cluster
+    maxRetriesPerRequest: null,     // required by BullMQ
+    enableReadyCheck: false,        // required for Azure Redis
+    enableCluster: false,           // disable cluster discovery (Azure Redis cluster uses redirects)
+    enableOfflineQueue: false,      // handle offline gracefully
+    dnsLookup: (address: string, callback: any) => require('dns').lookup(address, 4, callback), // support DNS for Azure endpoints
   };
   if (redis.options.password) bullmqConnOpts.password = redis.options.password;
   if (redis.options.username) bullmqConnOpts.username = redis.options.username;

@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { getAaaNationalHistory, getAaaStateHistory, getAaaPaddHistory, getEvents } from '../api/client';
 import { usePageSEO } from '../hooks/usePageSEO';
+import { useDashboardTelemetry } from '../hooks/useAnalytics';
 import { ChartContainer, PriceLineChart, type PriceChartSeries } from '../components/charts';
 
 type TimeRange = '7D' | '30D' | '90D' | '1Y' | '5Y' | 'ALL';
@@ -106,6 +107,7 @@ export default function Historical() {
   });
 
   const [timeRange, setTimeRange] = useState<TimeRange>('1Y');
+  const telemetry = useDashboardTelemetry();
   const [activeFuels, setActiveFuels] = useState<Set<FuelGrade>>(
     new Set(['regular', 'diesel'])
   );
@@ -323,7 +325,7 @@ export default function Historical() {
             {TIME_RANGES.map((range) => (
               <button
                 key={range.value}
-                onClick={() => setTimeRange(range.value)}
+                onClick={() => { telemetry.trackTimeRangeChanged(range.value, timeRange); setTimeRange(range.value); }}
                 className={`px-3 py-2 rounded-lg font-medium text-sm transition-colors ${
                   timeRange === range.value
                     ? 'bg-blue-600 text-white'
@@ -424,13 +426,20 @@ export default function Historical() {
                     return Math.abs(curTs - eventTs) < Math.abs(bestTs - eventTs) ? cur : best;
                   }, null);
                   return {
+                    id: evt.id ?? String(evt.event_date),
+                    category: evt.category,
                     x: nearest?.time,
-                    label: evt.title.length > 20 ? evt.title.slice(0, 20) + '…' : evt.title,
+                    label: evt.title.length > 20 ? evt.title.slice(0, 20) + '\u2026' : evt.title,
                     stroke: evt.impact === 'bullish' ? '#ef4444' : evt.impact === 'bearish' ? '#22c55e' : '#64748b',
                     strokeWidth: 1,
                     strokeDasharray: '4 2',
                   };
                 }) : []}
+                onAnnotationClick={(ref) => telemetry.trackChartAnnotationOpened(
+                  ref.id ?? ref.x?.toString() ?? 'unknown',
+                  ref.label ?? '',
+                  ref.category,
+                )}
               />
             </ChartContainer>
           </div>

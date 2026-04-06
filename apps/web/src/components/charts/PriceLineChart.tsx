@@ -23,6 +23,9 @@ export interface ChartReferenceLine {
   stroke?: string;
   strokeDasharray?: string;
   strokeWidth?: number;
+  /** Metadata passed back to onAnnotationClick when the marker is clicked. */
+  id?: string;
+  category?: string;
 }
 
 export interface PriceChartSeries {
@@ -51,6 +54,8 @@ export interface PriceLineChartProps {
     labelFormatter?: (label: any) => string;
   };
   referenceLines?: ChartReferenceLine[];
+  /** Called when an annotation reference line is clicked. */
+  onAnnotationClick?: (ref: ChartReferenceLine) => void;
   className?: string;
 }
 
@@ -74,6 +79,7 @@ export function PriceLineChart({
   margin = { top: 5, right: 30, left: 0, bottom: 5 },
   tooltip,
   referenceLines = [],
+  onAnnotationClick,
   className = '',
 }: PriceLineChartProps) {
   return (
@@ -145,6 +151,8 @@ export function PriceLineChart({
               stroke={ref.stroke ?? '#475569'}
               strokeWidth={ref.strokeWidth ?? 1}
               strokeDasharray={ref.strokeDasharray ?? '3 3'}
+              onClick={onAnnotationClick ? () => onAnnotationClick(ref) : undefined}
+              style={onAnnotationClick ? { cursor: 'pointer' } : undefined}
               label={
                 ref.label
                   ? {

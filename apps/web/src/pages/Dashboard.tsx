@@ -9,6 +9,7 @@ import StoryCard from '../components/StoryCard';
 import { usePageSEO } from '../hooks/usePageSEO';
 import { useDashboardFilters } from '../hooks/useDashboardFilters';
 import { useMarketStories } from '../hooks/useMarketStories';
+import { useDashboardTelemetry } from '../hooks/useAnalytics';
 import { resolvePercentChange, toDisplayNumber } from '../lib/priceChange';
 
 const SUPPLY_CLR: Record<string, string> = {
@@ -42,6 +43,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [filters, setFilters] = useDashboardFilters();
   const fuelType = filters.fuel;
+  const telemetry = useDashboardTelemetry();
   const fuelLabel = fuelType === 'gas_regular' ? 'Regular Gasoline' : 'Diesel';
 
   usePageSEO({
@@ -172,7 +174,7 @@ export default function Dashboard() {
         {/* Fuel type toggle */}
         <div className="flex items-center bg-slate-800 rounded-lg border border-slate-700 p-1">
           <button
-            onClick={() => setFilters({ fuel: 'gas_regular' })}
+            onClick={() => { telemetry.trackFilterChanged('fuel', 'gas_regular', fuelType); setFilters({ fuel: 'gas_regular' }); }}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
               fuelType === 'gas_regular'
                 ? 'bg-primary-600 text-white'
@@ -182,7 +184,7 @@ export default function Dashboard() {
             ⛽ Regular Gas
           </button>
           <button
-            onClick={() => setFilters({ fuel: 'diesel' })}
+            onClick={() => { telemetry.trackFilterChanged('fuel', 'diesel', fuelType); setFilters({ fuel: 'diesel' }); }}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
               fuelType === 'diesel'
                 ? 'bg-primary-600 text-white'
@@ -203,7 +205,10 @@ export default function Dashboard() {
               <StoryCard
                 key={story.id}
                 {...story}
-                onAction={story.onAction || (() => {})}
+                onAction={() => {
+                  telemetry.trackStoryCardOpened(story.id, story.title, story.category);
+                  story.onAction?.();
+                }}
               />
             ))}
           </div>
@@ -669,7 +674,7 @@ export default function Dashboard() {
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 overflow-hidden">
         <h3 className="text-xl font-bold text-white mb-2">Regional Prices</h3>
         <p className="text-xs text-slate-500 mb-4">Click a state for detailed breakdown</p>
-        <USPriceMap comparisonData={comparisonData ?? []} height={380} onStateClick={(abbr) => navigate(`/state/${abbr}${fuelType !== 'gas_regular' ? `?fuel=${fuelType}` : ''}`)} />
+        <USPriceMap comparisonData={comparisonData ?? []} height={380} onStateClick={(abbr) => { telemetry.trackStateDrilldown(abbr, fuelType); navigate(`/state/${abbr}${fuelType !== 'gas_regular' ? `?fuel=${fuelType}` : ''}`); }} />
       </div>
 
       {/* Cost Impact */}

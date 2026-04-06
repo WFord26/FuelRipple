@@ -31,7 +31,7 @@ export function initializeJobQueue(): void {
     port: redis.options.port,
     maxRetriesPerRequest: null,     // required by BullMQ
     enableReadyCheck: false,        // required for Azure Redis
-    enableCluster: false,           // disable cluster discovery (Azure Redis cluster uses redirects)
+    enableCluster: true,            // enable cluster mode to handle MOVED redirects from Azure Redis
     enableOfflineQueue: false,      // handle offline gracefully
     dnsLookup: (address: string, callback: any) => require('dns').lookup(address, 4, callback), // support DNS for Azure endpoints
   };

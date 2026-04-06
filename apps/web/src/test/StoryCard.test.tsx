@@ -32,7 +32,7 @@ describe('StoryCard', () => {
   });
 
   it('renders category badge', () => {
-    
+
     render(<StoryCard {...baseProps} />);
     expect(screen.getByText('Event')).toBeInTheDocument();
   });

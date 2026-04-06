@@ -78,30 +78,39 @@ async function main() {
 
   const knex = getKnex();
 
-  // Get all unique dates with state data in the range
-  const dates = await knex('aaa_state_aggregates')
-    .select('time')
+  // Fetch all state rows for the date range once, then group by time in memory
+  const allStateData = await knex('aaa_state_aggregates')
+    .select('*')
     .whereBetween('time', [opts.start, opts.end])
-    .groupBy('time')
     .orderBy('time', 'asc');
 
-  if (dates.length === 0) {
+  if (allStateData.length === 0) {
     console.log('⚠️  No state-level AAA data found in date range.');
     process.exit(0);
   }
 
-  console.log(`→ Found ${dates.length} dates with state data\n`);
+  const groupedStateData = new Map<string, typeof allStateData>();
+
+  for (const row of allStateData) {
+    const key = row.time instanceof Date ? row.time.toISOString() : String(row.time);
+    const rowsForTime = groupedStateData.get(key);
+
+    if (rowsForTime) {
+      rowsForTime.push(row);
+    } else {
+      groupedStateData.set(key, [row]);
+    }
+  }
+
+  console.log(`→ Found ${groupedStateData.size} dates with state data\n`);
 
   const nationalAverages: AaaNationalAverageRow[] = [];
   const energyPrices: EnergyPrice[] = [];
 
-  for (const { time } of dates) {
-    const stateData = await knex('aaa_state_aggregates')
-      .select('*')
-      .where('time', time);
-
+  for (const stateData of groupedStateData.values()) {
     if (stateData.length === 0) continue;
 
+    const { time } = stateData[0];
     const avg = (vals: (number | null)[]) => {
       const filtered = vals.filter((v): v is number => v !== null);
       return filtered.length > 0 ? filtered.reduce((a, b) => a + b, 0) / filtered.length : null;

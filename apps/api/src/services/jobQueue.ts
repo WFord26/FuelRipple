@@ -1,4 +1,5 @@
 import { Queue, Worker } from 'bullmq';
+import Redis, { Cluster } from 'ioredis';
 import { clearCache, redis } from './cache';
 import { fetchAllGasPrices, fetchDieselPrices, fetchRefineryUtilization, fetchRefineryProduction, fetchPetroleumStocks, fetchPetroleumImports, fetchFlowBalance, fetchRefineryCapacity820 } from './eiaClient';
 import { fetchCrudeQuotes } from './marketClient';
@@ -12,7 +13,7 @@ import { trackApiEvent, trackApiException, trackMetric } from '../lib/appInsight
 import { assertAAAScrapeHealthy, summarizeAAAScrape } from './aaaIngestion';
 
 export let dataQueue: Queue | null = null;
-let bullmqConnOpts: Record<string, any> | null = null;
+let bullmqConnection: Redis | Cluster | null = null;
 
 /**
  * Initialize BullMQ job queue
@@ -23,20 +24,54 @@ export function initializeJobQueue(): void {
     return;
   }
 
-  // Create queue with redis connection
-  // Pass all connection options (host, port, password, tls) so BullMQ's
-  // bundled ioredis connects correctly to TLS-only providers like Upstash.
-  bullmqConnOpts = {
-    host: redis.options.host,
-    port: redis.options.port,
-    maxRetriesPerRequest: null, // required by BullMQ
-    enableReadyCheck: false,    // required for Azure Redis Cluster
-  };
-  if (redis.options.password) bullmqConnOpts.password = redis.options.password;
-  if (redis.options.username) bullmqConnOpts.username = redis.options.username;
-  if (redis.options.tls) bullmqConnOpts.tls = redis.options.tls;
+  // Azure Redis Enterprise with OSSCluster (port 10000) requires a Cluster client
+  // to properly follow MOVED redirects. Standard Redis uses regular connection.
+  const isCluster = redis.options.port === 10000;
+  
+  if (isCluster) {
+    console.log('🔄 Detected Azure Redis Enterprise cluster (port 10000), using Cluster client');
+    
+    // Create a Cluster client for Azure Redis Enterprise
+    bullmqConnection = new Cluster(
+      [{ 
+        host: redis.options.host!, 
+        port: redis.options.port! 
+      }],
+      {
+        redisOptions: {
+          password: redis.options.password,
+          username: redis.options.username,
+          tls: redis.options.tls,
+        },
+        // Disable automatic cluster refresh since Azure manages cluster topology
+        enableAutoPipelining: false,
+        enableReadyCheck: false,
+        // Retry strategy for cluster MOVED redirects
+        clusterRetryStrategy: (times) => {
+          if (times > 3) return null; // Give up after 3 retries
+          return Math.min(100 * times, 2000); // Exponential backoff
+        },
+      }
+    );
+  } else {
+    console.log('🔗 Using standard Redis connection');
+    
+    // Standard Redis connection for non-cluster setups
+    bullmqConnection = new Redis({
+      host: redis.options.host!,
+      port: redis.options.port!,
+      password: redis.options.password,
+      username: redis.options.username,
+      tls: redis.options.tls,
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+    });
+  }
 
-  dataQueue = new Queue('data-ingestion', { connection: bullmqConnOpts, prefix: '{bull}' });
+  dataQueue = new Queue('data-ingestion', { 
+    connection: bullmqConnection, 
+    prefix: '{bull}' 
+  });
 
   console.log('✅ Job queue initialized');
 
@@ -200,7 +235,7 @@ async function scheduleJobs(): Promise<void> {
  * Create workers to process jobs
  */
 function createWorkers(): void {
-  if (!redis) return;
+  if (!bullmqConnection) return;
 
   const worker = new Worker(
     'data-ingestion',
@@ -246,7 +281,7 @@ function createWorkers(): void {
       }
     },
     {
-      connection: bullmqConnOpts!,
+      connection: bullmqConnection,
       prefix: '{bull}',
       concurrency: 3,
       maxStalledCount: 3,

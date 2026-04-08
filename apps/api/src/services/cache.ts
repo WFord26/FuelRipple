@@ -34,7 +34,15 @@ function privateLinkTlsServername(url: string): string | null {
 export function initializeCache() {
   if (process.env.REDIS_URL) {
     const servername = privateLinkTlsServername(process.env.REDIS_URL);
-    redis = new Redis(process.env.REDIS_URL, servername ? { tls: { servername } } : {});
+    const options: any = servername ? { tls: { servername } } : {};
+    
+    // Azure Cache for Redis Standard doesn't use username, only password
+    // If password is in separate env var, use it explicitly
+    if (process.env.REDIS_PASSWORD) {
+      options.password = process.env.REDIS_PASSWORD;
+    }
+    
+    redis = new Redis(process.env.REDIS_URL, options);
     redis.on('connect', () => {
       console.log('✅ Redis L2 cache connected');
     });
